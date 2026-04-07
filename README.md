@@ -1,128 +1,177 @@
-# sentinel
+# sentinel-npm
 
-> Proteção de supply chain para projetos npm — instale com integridade ou não instale.
+> Repositorio do Sentinel para ecossistema npm. CLI publicada: `sentinel`. Wrapper npm para `npx`: `sentinel-check`.
 
 ![build](https://img.shields.io/badge/build-passing-brightgreen)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 ![platforms](https://img.shields.io/badge/platforms-linux%20%7C%20macos%20%7C%20windows-lightgrey)
+![outputs](https://img.shields.io/badge/output-text%20%7C%20json%20%7C%20junit%20%7C%20github-informational)
 
-Gerenciadores de pacote instalam rápido. O **sentinel** instala com segurança — validando integridade de tarball, lockfile e registry antes de qualquer coisa tocar seu projeto.
+Gerenciadores de pacote instalam rapido. O **sentinel** adiciona uma etapa de confianca antes disso: verifica lockfile, registry e tarball e so permite a instalacao quando a cadeia bate.
+
+Neste repositorio existem dois pontos de entrada:
+
+- `sentinel`: o binario/CLI principal
+- `sentinel-check`: o wrapper npm para uso com `npx` e automacao
 
 ---
 
-## Por que sentinel?
+## O que voce ganha
 
-| | npm / yarn / pnpm | sentinel |
-|---|---|---|
-| Resolve e instala dependências | ✅ | ✅ |
-| Valida integridade do tarball | ❌ | ✅ |
-| Valida lockfile contra registry | ❌ | ✅ |
-| Bloqueia pacote comprometido | ❌ | ✅ |
-| Gate de segurança para CI | ❌ | ✅ |
-| Saída para automação (json/junit/github) | ❌ | ✅ |
+| Capacidade | npm / yarn / pnpm | sentinel |
+| --- | --- | --- |
+| Instalar dependencias | ✅ | ✅ |
+| Auditar lockfile sem instalar | ❌ | ✅ |
+| Validar integridade do tarball | ❌ | ✅ |
+| Validar lockfile contra registry | ❌ | ✅ |
+| Bloquear pacote comprometido | ❌ | ✅ |
+| Gate de seguranca para CI | ❌ | ✅ |
+| Saida para automacao | ❌ | ✅ |
+
+---
+
+## Escolha o comando certo
+
+| Comando | Quando usar | O que ele faz |
+| --- | --- | --- |
+| `sentinel check` | Auditoria local, PR review, debugging | Verifica o projeto atual sem instalar nada |
+| `sentinel ci` | Pipeline, ambiente limpo, gate estrito | Verifica **todos os pacotes do lockfile** e, se tudo estiver limpo, executa `npm ci` |
+| `sentinel install pacote@versao` | Adicionar um pacote novo com seguranca | Resolve o pacote no lockfile, verifica o alvo e as transitivas, depois executa `npm install` |
+| `sentinel report pacote` | Reportar suspeita manualmente | Exibe o fluxo de encaminhamento de evidencia para pacote suspeito |
+
+> Se a sua pergunta for "quero instalar o projeto inteiro com base no lockfile", o comando certo e `sentinel ci`.
+
+---
+
+## Como o fluxo funciona
+
+```mermaid
+flowchart LR
+    A[package-lock.json] --> B[sentinel ci]
+    B --> C[Verifica cada dependencia]
+    C --> D{Resultado da verificacao}
+    D -- CLEAN --> E[Executa npm ci]
+    D -- UNVERIFIABLE --> F[Bloqueia instalacao]
+    D -- COMPROMISED --> F
+    E --> G[node_modules pronto]
+```
+
+Se o projeto ainda nao tiver `package-lock.json`, o Sentinel tenta gera-lo antes de verificar.
 
 ---
 
 ## Comece em 30 segundos
 
-Escolha a abordagem que se encaixa no seu contexto:
+### Opcao A: sem instalar nada
 
-### Opção A — sem instalar nada (npx)
-
-Ideal para primeiro contato, ambientes efêmeros ou CI temporário:
+Boa para avaliacao rapida, ambientes efemeros e CI.
 
 ```bash
-# verificar projeto atual
+# verifica o projeto inteiro e, se estiver limpo, executa npm ci
 npx -y -p sentinel-check ci
 
-# instalar pacote com verificação
-npx -y -p sentinel-check install <pacote>@<versao>
+# audita o projeto sem instalar nada
+npx -y -p sentinel-check check
+
+# instala um pacote especifico com verificacao
+npx -y -p sentinel-check install express@4.21.2
 ```
 
-### Opção B — binário sentinel no PATH
+### Opcao B: binario no PATH
 
-Ideal para uso contínuo no time, substituindo `npm install` definitivamente:
+Boa para equipes que vao usar Sentinel diariamente.
+
+#### Linux e macOS
+
+Instalacao padrao em `/usr/local/bin`:
 
 ```bash
-# verificar projeto atual
-sentinel ci
-
-# instalar pacote com verificação
-sentinel install <pacote>@<versao>
+curl -fsSL https://raw.githubusercontent.com/SIG-sentinel/sentinel-npm/main/scripts/install.sh | sudo sh
 ```
 
-**Use a Opção A para adoção imediata. Migre para a Opção B quando o time estiver confortável.**
-
----
-
-## Instalando o binário (Opção B)
-
-### Linux e macOS
+Instalacao no diretorio do usuario:
 
 ```bash
-curl -fsSL https://github.com/SIG-sentinel/sentinel-npm/releases/latest/download/install.sh | sh
+curl -fsSL -o /tmp/install-sentinel.sh https://raw.githubusercontent.com/SIG-sentinel/sentinel-npm/main/scripts/install.sh
+INSTALL_DIR="$HOME/.local/bin" sh /tmp/install-sentinel.sh
 ```
 
-Isso baixa o binário correto para sua plataforma, verifica o checksum SHA-256 e instala em `~/.local/bin` (Linux) ou `/usr/local/bin` (macOS).
+Fixando uma versao especifica:
 
-Confirme a instalação:
+```bash
+curl -fsSL -o /tmp/install-sentinel.sh https://raw.githubusercontent.com/SIG-sentinel/sentinel-npm/main/scripts/install.sh
+sh /tmp/install-sentinel.sh --version 0.1.0
+```
+
+Confirmacao:
 
 ```bash
 sentinel --version
 ```
 
-### macOS via Homebrew _(em breve)_
+#### Windows
 
-```bash
-brew install sig-sentinel/tap/sentinel
-```
-
-### Windows (PowerShell)
-
-```powershell
-irm https://github.com/SIG-sentinel/sentinel-npm/releases/latest/download/install.ps1 | iex
-```
-
-Instala em `%LOCALAPPDATA%\sentinel\bin` e adiciona ao PATH do usuário.
-
-### Download manual
-
-Acesse [github.com/SIG-sentinel/sentinel-npm/releases](https://github.com/SIG-sentinel/sentinel-npm/releases) e baixe o binário para sua plataforma:
-
-| Plataforma | Arquivo |
-|---|---|
-| Linux x64 | `sentinel-linux-x64` |
-| macOS x64 | `sentinel-darwin-x64` |
-| macOS ARM (M1/M2/M3) | `sentinel-darwin-arm64` |
-| Windows x64 | `sentinel-windows-x64.exe` |
-
-Verifique o checksum com `checksums.txt` antes de executar.
+Hoje o caminho suportado e download manual do binario em [github.com/SIG-sentinel/sentinel-npm/releases](https://github.com/SIG-sentinel/sentinel-npm/releases), seguido de verificacao com `checksums.txt`.
 
 ---
 
-## Padronize no package.json do seu projeto
+## Exemplos de uso real
 
-Adicione ao `package.json` para que o time use sem depender de memória de comando:
+### 1. Auditar sem instalar
 
-**Com npx (sem instalação global):**
+```bash
+sentinel check
+```
+
+### 2. Verificar o lockfile inteiro e depois instalar
+
+```bash
+sentinel ci
+```
+
+### 3. Verificar sem tocar em `node_modules`
+
+```bash
+sentinel ci --dry-run
+```
+
+### 4. Ignorar dependencias de desenvolvimento no pipeline
+
+```bash
+sentinel ci --omit-dev
+```
+
+### 5. Instalar um pacote exato com verificacao
+
+```bash
+sentinel install lodash@4.17.21
+```
+
+> `sentinel install` exige versao exata. Tags como `latest` e ranges como `^4.0.0` nao sao aceitos.
+
+---
+
+## Adote no package.json
+
+### Usando npx
 
 ```json
 {
   "scripts": {
-    "sentinel:ci":      "npx -y -p sentinel-check ci",
-    "sentinel:check":   "npx -y -p sentinel-check check",
+    "sentinel:ci": "npx -y -p sentinel-check ci",
+    "sentinel:check": "npx -y -p sentinel-check check",
     "sentinel:install": "npx -y -p sentinel-check install"
   }
 }
 ```
 
-**Com binário no PATH:**
+### Usando binario no PATH
 
 ```json
 {
   "scripts": {
-    "sentinel:ci":      "sentinel ci",
-    "sentinel:check":   "sentinel check",
+    "sentinel:ci": "sentinel ci",
+    "sentinel:check": "sentinel check",
     "sentinel:install": "sentinel install"
   }
 }
@@ -138,95 +187,60 @@ npm run sentinel:install -- express@4.21.2
 
 ---
 
-## Como o sentinel protege seu projeto
+## Integracao em CI/CD
 
-Cada pacote passa por três camadas de verificação:
-
-```
-lockfile  ──►  registry  ──►  tarball
-   │               │              │
-   └── hash ok?    └── hash ok?   └── hash ok?
-         │               │              │
-       CLEAN           CLEAN          CLEAN
-         │               │              │
-        ❌ diverge     ❌ diverge     ❌ diverge
-         │               │              │
-    COMPROMISED    UNVERIFIABLE    COMPROMISED
-```
-
-- **CLEAN** — integridade confirmada, instalação permitida
-- **UNVERIFIABLE** — não foi possível confirmar; instalação é bloqueada
-- **COMPROMISED** — divergência detectada; instalação bloqueada sempre
-
----
-
-## Comandos
-
-```bash
-sentinel check                     # auditoria sem instalar
-sentinel install <pacote>@<versao> # instala pacote específico com verificação
-sentinel ci                        # gate estrito para pipelines
-sentinel report <pacote>           # relatório de um pacote
-```
-
----
-
-## Integração em CI/CD
-
-### GitHub Actions
+### GitHub Actions com npx
 
 ```yaml
-- name: Verificar integridade de dependências
+- name: Verificar integridade de dependencias
   run: npx -y -p sentinel-check ci
 ```
 
-Ou, com binário instalado no runner:
+### GitHub Actions com binario instalado
 
 ```yaml
 - name: Instalar sentinel
-  run: curl -fsSL https://github.com/SIG-sentinel/sentinel-npm/releases/latest/download/install.sh | sh
+  run: curl -fsSL https://raw.githubusercontent.com/SIG-sentinel/sentinel-npm/main/scripts/install.sh | sudo sh
 
-- name: Verificar integridade de dependências
+- name: Verificar integridade de dependencias
   run: sentinel ci
 ```
 
-### Saída para automação
+### Saida para automacao
 
 ```bash
-sentinel check --format json    # para parsing programático
-sentinel check --format junit   # para relatórios de test suite
-sentinel check --format github  # para anotações no PR (GitHub Actions)
+sentinel check --format json
+sentinel check --format junit
+sentinel check --format github
+sentinel ci --dry-run --format json --report sentinel-report.json
 ```
-
-> Sentinel instala apenas pacotes verificáveis.
 
 ---
 
-## Variáveis de ambiente
+## Como interpretar os resultados
 
-| Variável | Descrição |
-|---|---|
-| `SENTINEL_BIN` | caminho para binário local existente |
-| `SENTINEL_VERSION` | versão/tag específica do release |
-| `SENTINEL_RELEASE_REPO` | override de repositório (`owner/repo`) |
-| `SENTINEL_RELEASE_BASE_URL` | override da URL base de release |
-| `SENTINEL_SKIP_DOWNLOAD=1` | desabilita download automático no wrapper npx |
+| Status | Significado | Efeito |
+| --- | --- | --- |
+| `CLEAN` | integridade confirmada | instalacao permitida |
+| `UNVERIFIABLE` | nao foi possivel confirmar a cadeia | instalacao bloqueada |
+| `COMPROMISED` | divergencia detectada | instalacao bloqueada |
 
 ---
 
-## Arquitetura
+## Componentes principais
 
-```
-sentinel
-├── commands/       check · install · ci
-├── verifier.rs     motor de verificação de integridade
-├── npm.rs          integração com registry e lockfile
-├── crypto.rs       hashing e validação SHA-256/SHA-512
-├── cache.rs        cache local (SQLite)
-├── policy/         decisão de bloqueio e modo strict
-├── output.rs       renderização text · json · junit · github
-├── types/          contratos por domínio
-└── constants/      constantes por domínio
+```text
+sentinel-npm/
+├── src/commands/          comandos check, install, ci e report
+├── src/verifier/          verificacao de lockfile e tarball
+├── src/npm/               integracao com package-lock, package.json e registry
+├── src/policy/            regras de bloqueio e decisao de scripts
+├── src/ui/                saidas de terminal e formatos de relatorio
+├── src/types/             contratos tipados por dominio
+├── src/constants/         mensagens e configuracoes
+├── src/crypto.rs          hashing e validacao de integridade
+├── src/cache.rs           cache local de verificacao
+└── packages/sentinel-check/ wrapper npm para npx e ambientes Node
 ```
 
 ---

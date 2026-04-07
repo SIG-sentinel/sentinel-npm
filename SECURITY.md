@@ -2,13 +2,18 @@
 
 ## Overview
 
-Sentinel provides **supply chain security for npm** by verifying package integrity before installation. This document explains the security model and best practices.
+This repository, `sentinel-npm`, publishes two related artifacts:
+
+- `sentinel`: the Rust CLI that performs verification and installation gating
+- `sentinel-check`: the npm wrapper used with `npx` and Node-based automation
+
+This document explains the security model of the Sentinel npm workflow and the operational guarantees that exist today.
 
 ## Security Model
 
 Sentinel uses **npm's immutable dist.integrity field** as source of truth:
 
-```
+```text
 DOWNLOAD VERIFICATION (happens for every install):
   1. Download package tarball from npm registry
   2. Compute SHA-512 hash of downloaded tarball
@@ -27,14 +32,13 @@ INSTALLATION VERIFICATION (Sentinel: before/after):
 ## Threat Model
 
 | Threat | npm | sentinel | Notes |
-|--------|-----|----------|-------|
+| --- | --- | --- | --- |
 | Tarball tampering | ❌ | ✅ | Hash mismatch blocks install |
-| Registry compromise | ❌ | ✅ | Tarball verification independent |
-| Man-in-the-middle (HTTPS) | ✅ | ✅ | TLS 1.2+ required (rustls only) |
 | Lockfile tampering | ❌ | ✅ | Verified against registry |
-| Time-of-check-time-of-use (TOCTOU) | ❌ | ✅ | atomic check+install window |
-| Cached malware | ⚠️ | ✅ | Cache validation, TTL on UNVERIFIABLE |
-| Developer social engineering | ⚠️ | ⚠️ | Blocks technical attacks, not social |
+| Man-in-the-middle over HTTPS | ✅ | ✅ | TLS is still required |
+| Time-of-check-time-of-use (TOCTOU) between verify and install | ❌ | ✅ | lockfile hash is re-checked before install |
+| Cached stale result reuse | ⚠️ | ✅ | cache policy limits reuse for unverifiable results |
+| Developer social engineering | ⚠️ | ⚠️ | technical verification does not solve human trust decisions |
 
 ## Usage Recommendations
 
@@ -57,17 +61,18 @@ sentinel check
 ```
 
 **CI mode enforces:**
-- ❌ No UNVERIFIABLE packages (even for old/obscure packages)
-- ❌ No installation without explicit allowance
-- ✅ JSON report for audit trail
-- ✅ Process exits non-zero on any failure
+
+- ❌ No `UNVERIFIABLE` packages
+- ❌ No `COMPROMISED` packages
+- ✅ JSON report for audit trail by default
+- ✅ Non-zero exit code on any blocking result or failed `npm ci`
 
 ### Cache Behavior
 
 Sentinel caches verification results locally at `~/.cache/sentinel/`:
 
 | Status | TTL | Cache? | Behavior |
-|--------|-----|--------|----------|
+| --- | --- | --- | --- |
 | CLEAN | ∞ | ✅ | Reuse indefinitely (immutable hash) |
 | UNVERIFIABLE | 5 min | ✅ | Reuse briefly, re-check after TTL |
 | COMPROMISED | — | ❌ | Never cache (always block) |
@@ -90,9 +95,9 @@ curl -fsSL https://github.com/SIG-sentinel/sentinel-npm/releases/latest/download
 sha256sum -c /tmp/checksums.txt sentinel-linux-x64
 ```
 
-### npm Package (sentinel-check)
+### npm Package (`sentinel-check`)
 
-The npm wrapper (`sentinel-check`) ships a pre-compiled binary:
+The npm wrapper (`sentinel-check`) does not implement verification itself. It resolves or downloads the `sentinel` binary and forwards all arguments to it:
 
 ```bash
 # Install via npm (recommended for CI)
@@ -115,6 +120,7 @@ If you discover a vulnerability:
    - Your contact information
 
 We will:
+
 - Acknowledge receipt within 24 hours
 - Investigate and confirm impact
 - Prepare fix and release security patch
@@ -130,25 +136,26 @@ We will:
 
 ## Verification of Sentinel Itself
 
-Sentinel is a supply chain security tool—we practice what we preach:
+Sentinel is a supply chain security tool, so the repository aims to keep the trust surface small:
 
-- **No unsafe code** — 100% safe Rust
-- **No external processes** — no shell injection vectors
-- **No log files** — no sensitive data leak via logs
-- **No telemetry** — fully local computation
-- **Open source** — code available for audit
+- **No unsafe Rust** in the CLI codebase
+- **No telemetry** in the verification flow
+- **Open source** code available for audit
+- **Pinned release workflow actions** for GitHub Actions publishing
+
+Operational note: the project does invoke external package-manager commands such as `npm ci` and `npm install` as part of the guarded workflow. That behavior is intentional and part of the trust boundary.
 
 ## Limitations
 
-### What sentinel does NOT protect against:
+### What sentinel does NOT protect against
 
-1. **Social engineering** — if developer manually installs malicious package
-2. **Compromised npm account** — if package maintainer is hacked (but we catch the tarball diff)
-3. **Registry operator compromise** — we only verify against their published hashes
-4. **Old/obscure packages** — registry may not have integrity data (UNVERIFIABLE status)
-5. **Post-installation exploits** — if package contains 0-day vulnerability
+1. **Social engineering** — if a developer bypasses the tooling or trusts a malicious package intentionally
+2. **Malicious but consistently published packages** — if registry metadata and tarball agree, Sentinel verifies integrity, not intent
+3. **Registry/operator trust root** — Sentinel still relies on published registry metadata as part of the chain
+4. **Packages without sufficient metadata** — these become `UNVERIFIABLE`
+5. **Post-installation runtime vulnerabilities** — this is not a vulnerability scanner
 
-### Complementary tools:
+### Complementary tools
 
 - `npm audit` — vulnerability scanning in dependencies
 - `snyk` / `Dependabot` — automated vulnerability monitoring
@@ -163,14 +170,15 @@ Sentinel is a supply chain security tool—we practice what we preach:
 
 ### Q: What if npm registry is down?
 
-**A:** Sentinel marks packages as `UNVERIFIABLE`. In CI, this blocks install (safe-fail). You can `--allow-unverifiable` in development (local only).
+**A:** Sentinel marks affected packages as `UNVERIFIABLE`. In `sentinel ci`, this blocks installation by design.
 
 ### Q: Is sentinel production-ready?
 
 **A:** Yes, for:
-- ✅ Development environments (catch issues before commit)
-- ✅ CI/CD gates (prevent supply chain attacks)
-- ✅ Audit workflows (compliance + security)
+
+- ✅ Development environments
+- ✅ CI/CD gates
+- ✅ Audit workflows
 
 ### Q: What's the performance impact?
 

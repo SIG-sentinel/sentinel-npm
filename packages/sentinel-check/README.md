@@ -1,8 +1,10 @@
 # sentinel-check
 
-> Thin npm wrapper for the [Sentinel](https://github.com/SIG-sentinel/sentinel-npm) CLI.
+> Thin npm wrapper for the `sentinel` CLI published from the [sentinel-npm](https://github.com/SIG-sentinel/sentinel-npm) repository.
 
 Lets you run `sentinel` without installing anything — npx resolves and executes the binary automatically.
+
+`sentinel-check` is not the main product name. It is the npm distribution channel used to expose Sentinel conveniently in Node and CI environments.
 
 ---
 
@@ -37,11 +39,11 @@ sentinel check
 
 ```json
 {
-	"scripts": {
-		"sentinel:ci": "npx -y -p sentinel-check ci",
-		"sentinel:check": "npx -y -p sentinel-check check",
-		"sentinel:install": "npx -y -p sentinel-check install"
-	}
+  "scripts": {
+    "sentinel:ci": "npx -y -p sentinel-check ci",
+    "sentinel:check": "npx -y -p sentinel-check check",
+    "sentinel:install": "npx -y -p sentinel-check install"
+  }
 }
 ```
 
@@ -65,7 +67,7 @@ npm run sentinel:install -- lodash@4.17.21
 ## Environment overrides
 
 | Variable | Description |
-|---|---|
+| --- | --- |
 | `SENTINEL_BIN` | path to an existing local binary |
 | `SENTINEL_VERSION` | pin a specific release version |
 | `SENTINEL_RELEASE_REPO` | override release repository (`owner/repo`) |
