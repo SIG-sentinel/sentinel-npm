@@ -7,21 +7,34 @@ REPO="SIG-sentinel/sentinel-npm"
 INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
 BASE_URL="${SENTINEL_RELEASE_BASE_URL:-}"
 
+require_arg() {
+  option_name="$1"
+
+  if [ "$#" -lt 2 ] || [ -z "$2" ]; then
+    echo "missing value for $option_name" >&2
+    exit 1
+  fi
+}
+
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --version)
+      require_arg "$@"
       VERSION="$2"
       shift 2
       ;;
     --repo)
+      require_arg "$@"
       REPO="$2"
       shift 2
       ;;
     --install-dir)
+      require_arg "$@"
       INSTALL_DIR="$2"
       shift 2
       ;;
     --base-url)
+      require_arg "$@"
       BASE_URL="$2"
       shift 2
       ;;
@@ -34,11 +47,9 @@ done
 
 # Validate REPO to prevent URL injection (must be owner/repo)
 case "$REPO" in
-  *[!A-Za-z0-9._/-]*)
-    echo "invalid repository format: $REPO" >&2
-    exit 1
+  [A-Za-z0-9._-]*/[A-Za-z0-9._-]*)
     ;;
-  */*/*)  # more than one slash
+  *)
     echo "invalid repository format: $REPO" >&2
     exit 1
     ;;
