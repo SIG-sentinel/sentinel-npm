@@ -75,5 +75,8 @@ pub fn lockfile_sha256(cwd: &Path) -> Option<String> {
     let mut hasher = Sha256::new();
 
     hasher.update(bytes);
-    Some(format!("{:x}", hasher.finalize()))
+    let digest = hasher.finalize();
+    let hash = digest.iter().map(|byte| format!("{byte:02x}")).collect();
+
+    Some(hash)
 }

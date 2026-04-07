@@ -14,7 +14,9 @@ use sentinel::types::VerifyIntegrityParams;
 fn sha256_empty_string() {
     let mut hasher = Sha256::new();
     hasher.update(EMPTY_INPUT);
-    let hash_hex = format!("{:x}", hasher.finalize());
+    let digest = hasher.finalize();
+    let hash_hex: String = digest.iter().map(|byte| format!("{byte:02x}")).collect();
+
     assert_eq!(hash_hex, SHA256_EMPTY_HEX);
 }
 

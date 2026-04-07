@@ -12,39 +12,39 @@ path = "src/main.rs"
 
 [dependencies]
 # CLI
-clap         = { version = "4.5", features = ["derive", "env"] }
-colored      = "2.1"
-indicatif    = { version = "0.17", features = ["tokio"] }
+clap         = { version = "4.6", features = ["derive", "env"] }
+colored      = "3.1"
+indicatif    = { version = "0.18", features = ["tokio"] }
 
 # HTTP — rustls only, zero OpenSSL
-reqwest      = { version = "0.12", features = ["stream", "rustls-tls", "json"], default-features = false }
-tokio        = { version = "1.37", features = ["full"] }
-futures-util = "0.3"
-bytes        = "1.6"
+reqwest      = { version = "0.13", features = ["stream", "rustls", "json"], default-features = false }
+tokio        = { version = "1.51", features = ["full"] }
+futures-util = "0.3.32"
+bytes        = "1.11"
 
 # Hashing — pure Rust, zero system deps
-sha2         = "0.10"
-base64       = "0.22"
-subtle       = "2.5"  # constant-time comparison
+sha2         = "0.11"
+base64       = "0.22.1"
+subtle       = "2.6.1"  # constant-time comparison
 
 # JSON
-serde        = { version = "1.0", features = ["derive"] }
-serde_json   = "1.0"
+serde        = { version = "1.0.228", features = ["derive"] }
+serde_json   = "1.0.149"
 
 # Cache local
-rusqlite     = { version = "0.31", features = ["bundled"] }
+rusqlite     = { version = "0.39", features = ["bundled"] }
 
 # Erros e utils
-thiserror    = "1.0"
-anyhow       = "1.0"
-chrono       = { version = "0.4", features = ["serde"] }
-tracing      = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-dirs         = "5.0"
+thiserror    = "2.0.18"
+anyhow       = "1.0.102"
+chrono       = { version = "0.4.44", features = ["serde"] }
+tracing      = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+dirs         = "6.0.0"
 
 [dev-dependencies]
-tokio = { version = "1.37", features = ["full", "test-util"] }
-tempfile = "3.10"
+tokio = { version = "1.51", features = ["full", "test-util"] }
+tempfile = "3.27.0"
 
 [profile.release]
 opt-level     = 3
