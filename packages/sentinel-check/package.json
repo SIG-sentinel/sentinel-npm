@@ -1,0 +1,35 @@
+{
+  "name": "sentinel-check",
+  "version": "0.1.0",
+  "description": "User-friendly command wrappers for Sentinel CLI",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SIG-sentinel/sentinel-npm.git"
+  },
+  "homepage": "https://github.com/SIG-sentinel/sentinel-npm",
+  "keywords": [
+    "npm",
+    "supply-chain",
+    "security",
+    "ci",
+    "cli"
+  ],
+  "files": [
+    "bin",
+    "README.md",
+    "package.json"
+  ],
+  "bin": {
+    "sentinel": "bin/sentinel.js"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
