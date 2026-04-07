@@ -1,0 +1,142 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+# Default: read-only everywhere. Each job declares what it actually needs.
+permissions: {}
+
+jobs:
+  verify-versions:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+    steps:
+      # Pinned to SHA — mutable tags (@v4) are a supply-chain risk for a
+      # security tool that verifies supply-chain integrity.
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Verify Cargo and npm versions match tag
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME#v}"
+          CARGO_VERSION=$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -n1)
+
+          # Use node --eval to avoid arbitrary code in package.json being executed.
+          NPM_VERSION=$(node --eval "process.stdout.write(JSON.parse(require('fs').readFileSync('./packages/sentinel-check/package.json','utf8')).version)")
+
+          echo "Cargo: $CARGO_VERSION  npm: $NPM_VERSION  tag: $TAG"
+          test "$TAG" = "$CARGO_VERSION" || { echo "Cargo.toml version mismatch"; exit 1; }
+          test "$TAG" = "$NPM_VERSION"   || { echo "package.json version mismatch"; exit 1; }
+
+          echo "version=v$TAG" >> "$GITHUB_OUTPUT"
+
+  build-binaries:
+    needs: verify-versions
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            asset_name: sentinel-linux-x64
+            binary_name: sentinel
+          - os: macos-13
+            target: x86_64-apple-darwin
+            asset_name: sentinel-darwin-x64
+            binary_name: sentinel
+          - os: macos-14
+            target: aarch64-apple-darwin
+            asset_name: sentinel-darwin-arm64
+            binary_name: sentinel
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            asset_name: sentinel-windows-x64.exe
+            binary_name: sentinel.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # stable
+        with:
+          toolchain: stable
+          targets: ${{ matrix.target }}
+
+      - name: Build release binary
+        run: cargo build --release --locked --target ${{ matrix.target }}
+
+      - name: Prepare artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp "target/${{ matrix.target }}/release/${{ matrix.binary_name }}" "dist/${{ matrix.asset_name }}"
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ${{ matrix.asset_name }}
+          path: dist/${{ matrix.asset_name }}
+          if-no-files-found: error
+
+  publish-release:
+    needs:
+      - verify-versions
+      - build-binaries
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # required to create the GitHub Release
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          path: release-artifacts
+
+      - name: Assemble release files and checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          find release-artifacts -type f -maxdepth 2 -exec cp {} dist/ \;
+          pushd dist >/dev/null
+          sha256sum sentinel-* > checksums.txt
+          popd >/dev/null
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe # v2
+        with:
+          tag_name: ${{ needs.verify-versions.outputs.version }}
+          files: |
+            dist/sentinel-*
+            dist/checksums.txt
+
+  publish-npm:
+    needs:
+      - verify-versions
+      - publish-release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Required for npm provenance (OIDC token exchange with registry.npmjs.org).
+      # Requires "trusted publisher" configured on npmjs.com — no NPM_TOKEN needed.
+      id-token: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+
+      - name: Publish sentinel-check wrapper with provenance
+        run: npm publish --provenance --access public
+        working-directory: packages/sentinel-check
