@@ -184,7 +184,41 @@ npm run sentinel:ci
 npm run sentinel:check
 npm run sentinel:install -- express@4.21.2
 ```
+### Using npx
 
+```json
+{
+  "scripts": {
+    "sentinel:ci": "npx -y -p sentinel-check ci",
+    "sentinel:check": "npx -y -p sentinel-check check"
+  }
+}
+```
+
+To install a specific package with verification, pass the argument directly:
+
+```bash
+npx -y -p sentinel-check install express@4.21.2
+```
+
+### Using the binary on PATH
+
+```json
+{
+  "scripts": {
+    "sentinel:ci": "sentinel ci",
+    "sentinel:check": "sentinel check"
+  }
+}
+```
+
+Usage:
+
+```bash
+npm run sentinel:ci
+npm run sentinel:check
+sentinel install express@4.21.2
+```
 ---
 
 ## CI/CD integration
