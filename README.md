@@ -57,7 +57,7 @@ npx --yes sentinel-check ci
 npx --yes sentinel-check check
 
 # install a specific package with verification
-npx --yes sentinel-check install express@4.21.2
+npx --yes sentinel-check install sentinel-check
 ```
 
 > Important: in clean environments, avoid `npx sentinel ...` because npm may resolve a different package named `sentinel`. Use `npx --yes sentinel-check ...`.
@@ -118,7 +118,7 @@ Usage:
 ```bash
 npm run sentinel:ci
 npm run sentinel:check
-npx --yes sentinel-check install express@4.21.2
+npx --yes sentinel-check install sentinel-check
 ```
 
 ### Using sentinel binary on PATH
@@ -137,7 +137,7 @@ Usage:
 ```bash
 npm run sentinel:ci
 npm run sentinel:check
-sentinel install express@4.21.2
+sentinel install sentinel-check
 ```
 
 ---

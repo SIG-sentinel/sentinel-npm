@@ -177,7 +177,7 @@ jobs:
           "$BIN" ci --cwd "$(pwd)" --no-scripts --format json --report ../r.json > ../ci.json
           grep -q "sentinel_version" ../ci.json
           test -f ../r.json
-          "$BIN" install lodash@4.17.21 --cwd "$(pwd)" --dry-run --format text
+          "$BIN" install sentinel-check --cwd "$(pwd)" --dry-run --format text
           echo "[${{ matrix.asset }}] all checks passed"
 
   publish-npm:

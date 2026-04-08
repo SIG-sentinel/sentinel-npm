@@ -18,7 +18,7 @@ npx --yes sentinel-check check
 npx --yes sentinel-check ci
 
 # install one package with verification
-npx --yes sentinel-check install lodash@4.17.21
+npx --yes sentinel-check install sentinel-check
 ```
 
 ### Add to package.json scripts (recommended)
@@ -46,7 +46,7 @@ npm run sentinel:ci
 Need package install with verification? Run it directly:
 
 ```bash
-npx --yes sentinel-check install express@4.21.2
+npx --yes sentinel-check install sentinel-check
 ```
 
 ---
