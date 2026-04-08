@@ -13,6 +13,7 @@ pub struct PreparedCheckState {
     pub verifier: Arc<Verifier>,
     pub lockfile_entries: Arc<HashMap<String, LockfileEntry>>,
     pub packages_to_verify: Vec<DependencyNode>,
+    pub cycles: Vec<Vec<String>>,
 }
 
 pub struct CollectPackagesToVerifyParams<'a> {
