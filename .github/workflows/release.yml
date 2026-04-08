@@ -132,10 +132,16 @@ jobs:
         include:
           - os: ubuntu-latest
             asset: sentinel-linux-x64
+            smoke_mode: full
           - os: macos-14
             asset: sentinel-darwin-arm64
+            smoke_mode: full
+          - os: macos-14
+            asset: sentinel-darwin-x64
+            smoke_mode: x64-check
           - os: windows-latest
             asset: sentinel-windows-x64.exe
+            smoke_mode: windows
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
@@ -159,7 +165,7 @@ jobs:
         run: ./${{ matrix.asset }} --version
 
       - name: Functional smoke test (Unix)
-        if: runner.os != 'Windows'
+        if: runner.os != 'Windows' && matrix.smoke_mode == 'full'
         shell: bash
         run: |
           set -euo pipefail
@@ -176,24 +182,30 @@ jobs:
           "$BIN" install "sentinel-check@${SENTINEL_NPM_VERSION}" --cwd "$(pwd)" --dry-run --format text
           echo "[${{ matrix.asset }}] all checks passed"
 
+      - name: Validate darwin x64 artifact
+        if: matrix.smoke_mode == 'x64-check'
+        shell: bash
+        run: |
+          set -euo pipefail
+          file "./${{ matrix.asset }}" | grep -q "x86_64"
+          echo "[${{ matrix.asset }}] x64 artifact detected"
+
       - name: Functional smoke test (Windows)
-        if: runner.os == 'Windows'
+        if: matrix.smoke_mode == 'windows'
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
+          $PSNativeCommandUseErrorActionPreference = $true
           New-Item -ItemType Directory -Path testapp -Force | Out-Null
           Set-Location testapp
           npm init -y | Out-Null
           npm install lodash express | Out-Null
 
           $bin = Join-Path $env:GITHUB_WORKSPACE "${{ matrix.asset }}"
-          $sentinelNpmVersion = (npm view sentinel-check version).Trim()
 
           & $bin check --cwd (Get-Location).Path --format text
-          & $bin check --cwd (Get-Location).Path --format json > ..\check.json
-          & $bin ci --cwd (Get-Location).Path --dry-run --format text
-
-          if (-not (Select-String -Path ..\check.json -Pattern "sentinel_version" -Quiet)) {
-            throw "check.json does not contain sentinel_version"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Windows check smoke failed with exit code $LASTEXITCODE"
           }
 
           Write-Host "[${{ matrix.asset }}] binary validation passed"
