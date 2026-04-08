@@ -10,6 +10,7 @@ pub struct Report {
     pub mode: RunMode,
     pub summary: Summary,
     pub results: Vec<VerifyResult>,
+    pub cycles: Vec<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -57,13 +58,14 @@ impl Summary {
 }
 
 impl Report {
-    pub fn from_results(mode: RunMode, results: Vec<VerifyResult>) -> Self {
+    pub fn from_results(mode: RunMode, results: Vec<VerifyResult>, cycles: Vec<Vec<String>>) -> Self {
         Self {
             sentinel_version: env!("CARGO_PKG_VERSION").to_string(),
             timestamp: chrono::Utc::now().to_rfc3339(),
             mode,
             summary: Summary::from_results(&results),
             results,
+            cycles,
         }
     }
 }
