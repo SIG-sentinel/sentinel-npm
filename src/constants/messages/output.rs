@@ -38,13 +38,13 @@ pub const OUTPUT_INSTALL_BLOCKED_NEXT_HEADER: &str = "\n  To proceed, review eac
 pub const OUTPUT_INSTALL_BLOCKED_GUIDANCE_NO_INTEGRITY: &str = "  This package predates npm integrity fields and cannot be verified.\n\
     Recommended:\n\
     1. Remove the package from package.json\n\
-    2. Delete package-lock.json\n\
-    3. npm install <package>   (regenerates lockfile with integrity field)\n\
+    2. Delete the lockfile\n\
+    3. Reinstall with your package manager to regenerate the lockfile\n\
     4. sentinel install";
 pub const OUTPUT_INSTALL_BLOCKED_GUIDANCE_REGISTRY_UNAVAILABLE: &str = "  Cannot verify — npm registry is unreachable.\n\
     Retry when the registry is available, then re-run: sentinel install";
-pub const OUTPUT_INSTALL_BLOCKED_GUIDANCE_NOT_IN_LOCKFILE: &str = "  Package not tracked in package-lock.json. Regenerate lockfile first:\n\
-    npm install\n\
+pub const OUTPUT_INSTALL_BLOCKED_GUIDANCE_NOT_IN_LOCKFILE: &str = "  Package not tracked in lockfile. Regenerate lockfile first:\n\
+    install with your package manager\n\
     Then re-run: sentinel install";
 pub const OUTPUT_INSTALL_BLOCKED_GUIDANCE_COMPROMISED: &str = "  Integrity mismatch — this package may have been tampered with.\n\
     Investigate:";
@@ -55,7 +55,7 @@ pub const OUTPUT_SYMBOL_WARNING: &str = "⚠";
 pub const OUTPUT_SYMBOL_ERROR: &str = "✗";
 pub const OUTPUT_GITHUB_ERROR_TITLE: &str = "sentinel-compromised";
 pub const OUTPUT_GITHUB_WARNING_TITLE: &str = "sentinel-unverifiable";
-pub const OUTPUT_GITHUB_LOCKFILE_REF: &str = "package-lock.json";
+pub const OUTPUT_GITHUB_LOCKFILE_REF: &str = "lockfile";
 pub const OUTPUT_GITHUB_ERROR_FORMAT: &str = "::error title={},file={}::{} — {}";
 pub const OUTPUT_XML_HEADER: &str = r#"<?xml version="1.0" encoding="UTF-8"?>"#;
 pub const OUTPUT_XML_TESTSUITES: &str =

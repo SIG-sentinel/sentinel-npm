@@ -1,39 +1,40 @@
 use std::path::Path;
 use std::process::{Command, ExitStatus, Output};
 
-use crate::constants::{
-    NPM_ARG_CI, NPM_ARG_IGNORE_SCRIPTS, NPM_ARG_INSTALL, NPM_ARG_NO_AUDIT, NPM_ARG_NO_FUND,
-    NPM_ARG_OMIT_DEV, NPM_ARG_OMIT_OPTIONAL, NPM_ARG_PACKAGE_LOCK_ONLY, NPM_ARG_SAVE_EXACT,
-    NPM_ARG_SILENT, NPM_CMD,
+use crate::ecosystem::{
+    CommandPlan, InstallExecutor, PackageManager, PackageManagerExecutor, detect_package_manager,
 };
 use crate::types::{InstallPackageParams, ResolvePackageIntoLockfileParams, RunCleanInstallParams};
 
-fn npm_command(current_working_directory: &Path) -> Command {
-    let mut command = Command::new(NPM_CMD);
-
-    command.current_dir(current_working_directory);
-    command
+fn detected_manager(current_working_directory: &Path) -> PackageManager {
+    detect_package_manager(current_working_directory).unwrap_or(PackageManager::Npm)
 }
 
-fn append_enabled_args(command: &mut Command, optional_args: &[(bool, &str)]) {
-    optional_args
-        .iter()
-        .filter_map(|(enabled, arg)| enabled.then_some(*arg))
-        .for_each(|arg| {
-            command.arg(arg);
-        });
+fn run_output_plan(current_working_directory: &Path, plan: CommandPlan) -> std::io::Result<Output> {
+    let mut command = Command::new(plan.program);
+
+    command.current_dir(current_working_directory);
+    command.args(plan.args);
+    command.output()
+}
+
+fn run_status_plan(
+    current_working_directory: &Path,
+    plan: CommandPlan,
+) -> std::io::Result<ExitStatus> {
+    let mut command = Command::new(plan.program);
+
+    command.current_dir(current_working_directory);
+    command.args(plan.args);
+    command.status()
 }
 
 pub fn generate_lockfile(current_working_directory: &Path) -> std::io::Result<Output> {
-    let mut command = npm_command(current_working_directory);
+    let manager = detected_manager(current_working_directory);
+    let executor = PackageManagerExecutor::new(manager);
+    let plan = executor.generate_lockfile_plan();
 
-    command
-        .arg(NPM_ARG_INSTALL)
-        .arg(NPM_ARG_PACKAGE_LOCK_ONLY)
-        .arg(NPM_ARG_IGNORE_SCRIPTS)
-        .arg(NPM_ARG_NO_AUDIT)
-        .arg(NPM_ARG_NO_FUND)
-        .output()
+    run_output_plan(current_working_directory, plan)
 }
 
 pub fn resolve_package_into_lockfile(
@@ -44,17 +45,11 @@ pub fn resolve_package_into_lockfile(
         package_reference,
     } = params;
 
-    let mut command = npm_command(current_working_directory);
+    let manager = detected_manager(current_working_directory);
+    let executor = PackageManagerExecutor::new(manager);
+    let plan = executor.resolve_package_lockfile_plan(&package_reference.to_string());
 
-    command
-        .arg(NPM_ARG_INSTALL)
-        .arg(package_reference.to_string())
-        .arg(NPM_ARG_SAVE_EXACT)
-        .arg(NPM_ARG_PACKAGE_LOCK_ONLY)
-        .arg(NPM_ARG_IGNORE_SCRIPTS)
-        .arg(NPM_ARG_NO_AUDIT)
-        .arg(NPM_ARG_NO_FUND)
-        .output()
+    run_output_plan(current_working_directory, plan)
 }
 
 pub fn install_package(params: InstallPackageParams<'_>) -> std::io::Result<ExitStatus> {
@@ -64,18 +59,11 @@ pub fn install_package(params: InstallPackageParams<'_>) -> std::io::Result<Exit
         ignore_scripts,
     } = params;
 
-    let mut command = npm_command(current_working_directory);
+    let manager = detected_manager(current_working_directory);
+    let executor = PackageManagerExecutor::new(manager);
+    let plan = executor.install_package_plan(&package_reference.to_string(), ignore_scripts);
 
-    command
-        .arg(NPM_ARG_INSTALL)
-        .arg(package_reference.to_string())
-        .arg(NPM_ARG_SAVE_EXACT)
-        .arg(NPM_ARG_NO_AUDIT)
-        .arg(NPM_ARG_NO_FUND);
-
-    append_enabled_args(&mut command, &[(ignore_scripts, NPM_ARG_IGNORE_SCRIPTS)]);
-
-    command.status()
+    run_status_plan(current_working_directory, plan)
 }
 
 pub fn run_clean_install(params: RunCleanInstallParams<'_>) -> std::io::Result<ExitStatus> {
@@ -87,22 +75,14 @@ pub fn run_clean_install(params: RunCleanInstallParams<'_>) -> std::io::Result<E
         silent_output,
     } = params;
 
-    let mut command = npm_command(current_working_directory);
+    let manager = detected_manager(current_working_directory);
+    let executor = PackageManagerExecutor::new(manager);
+    let plan = executor.clean_install_plan(crate::types::CleanInstallPlanParams {
+        ignore_scripts,
+        omit_dev,
+        omit_optional,
+        silent_output,
+    });
 
-    command
-        .arg(NPM_ARG_CI)
-        .arg(NPM_ARG_NO_AUDIT)
-        .arg(NPM_ARG_NO_FUND);
-
-    append_enabled_args(
-        &mut command,
-        &[
-            (omit_dev, NPM_ARG_OMIT_DEV),
-            (omit_optional, NPM_ARG_OMIT_OPTIONAL),
-            (ignore_scripts, NPM_ARG_IGNORE_SCRIPTS),
-            (silent_output, NPM_ARG_SILENT),
-        ],
-    );
-
-    command.status()
+    run_status_plan(current_working_directory, plan)
 }

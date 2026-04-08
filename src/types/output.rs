@@ -35,5 +35,6 @@ pub struct PrintUnverifiableEntryParams<'a> {
 
 pub struct PrintReportSubmissionParams<'a> {
     pub package_name: &'a str,
+    pub reason: &'a str,
     pub evidence: Option<&'a str>,
 }

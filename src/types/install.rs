@@ -13,7 +13,8 @@ use super::{
 
 pub struct ProjectFilesSnapshot {
     pub(crate) package_json: Option<Vec<u8>>,
-    pub(crate) package_lock_json: Option<Vec<u8>>,
+    pub(crate) lockfile_name: String,
+    pub(crate) lockfile_contents: Option<Vec<u8>>,
 }
 
 pub struct RestoreFileParams<'a> {
@@ -126,6 +127,13 @@ pub struct InstallPackageParams<'a> {
 
 pub struct RunCleanInstallParams<'a> {
     pub current_working_directory: &'a Path,
+    pub ignore_scripts: bool,
+    pub omit_dev: bool,
+    pub omit_optional: bool,
+    pub silent_output: bool,
+}
+
+pub struct CleanInstallPlanParams {
     pub ignore_scripts: bool,
     pub omit_dev: bool,
     pub omit_optional: bool,

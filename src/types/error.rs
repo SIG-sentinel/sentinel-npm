@@ -20,7 +20,7 @@ pub enum SentinelError {
     #[error("package.json not found in {path}")]
     PackageJsonNotFound { path: String },
 
-    #[error("lockfile not found — run npm install first, then sentinel check")]
+    #[error("lockfile not found — generate it with your package manager, then run sentinel check")]
     LockfileNotFound,
 
     #[error("lockfile parse error: {0}")]

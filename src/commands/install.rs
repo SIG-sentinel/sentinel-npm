@@ -9,6 +9,7 @@ use crate::constants::{
     INSTALL_ERR_LOCKFILE_GENERATE_FAILED, INSTALL_MAX_CONCURRENCY, INSTALL_MSG_NOTHING_TO_INSTALL,
     INSTALL_PROGRESS_TEMPLATE, INSTALL_PROGRESS_VERIFY_MSG,
 };
+use crate::ecosystem::active_lockfile_path;
 use crate::output::{print_install_blocked, print_install_blocked_unverifiable, print_report};
 use crate::policy::{DefaultSecurityPolicy, InstallPolicyDecision, SecurityPolicy};
 use crate::types::{
@@ -168,6 +169,10 @@ fn resolve_install_policy(params: ResolveInstallPolicyParams) -> InstallPolicyDe
     })
 }
 
+fn should_print_report(output_format: &OutputFormat, quiet: bool) -> bool {
+    !quiet || !matches!(output_format, OutputFormat::Text)
+}
+
 async fn prepare_install_state(args: &InstallArgs) -> Result<PreparedInstallState, ExitCode> {
     if let Err(error) = validate_package_json_dependencies(&args.cwd) {
         ui::print_invalid_package_json(&error);
@@ -210,14 +215,17 @@ async fn prepare_install_state(args: &InstallArgs) -> Result<PreparedInstallStat
         Ok(shared_state) => shared_state,
         Err(SharedCommandStateError::DependencyTree(error)) => {
             ui::print_failed_to_build_dependency_tree(&error);
+            
             return Err(ExitCode::FAILURE);
         }
         Err(SharedCommandStateError::LockfileEntries(error)) => {
             ui::print_failed_to_read_lockfile_entries(&error);
+            
             return Err(ExitCode::FAILURE);
         }
         Err(SharedCommandStateError::Verifier(error)) => {
             ui::print_verifier_init_failed(&error);
+            
             return Err(ExitCode::FAILURE);
         }
     };
@@ -261,7 +269,6 @@ async fn prepare_install_state(args: &InstallArgs) -> Result<PreparedInstallStat
 
 fn print_blocking_install_results(results: &[VerifyResult]) -> bool {
     let blocked = collect_blocked_verify_results(results);
-
     let has_compromised_results = !blocked.compromised.is_empty();
 
     if has_compromised_results {
@@ -274,6 +281,7 @@ fn print_blocking_install_results(results: &[VerifyResult]) -> bool {
     }
 
     let has_unverifiable_results = !blocked.unverifiable.is_empty();
+
     if has_unverifiable_results {
         print_block_reason_results(PrintBlockReasonResultsParams {
             block_reason: InstallBlockReason::Unverifiable,
@@ -304,6 +312,7 @@ async fn prepare_ci_state(args: &CiArgs) -> Result<PreparedCiState, ExitCode> {
     }
 
     let lockfile_synced = sync_lockfile_with_package_json(&args.cwd);
+
     if !lockfile_synced {
         ui::print_generic_error(INSTALL_ERR_LOCKFILE_GENERATE_FAILED);
 
@@ -316,14 +325,17 @@ async fn prepare_ci_state(args: &CiArgs) -> Result<PreparedCiState, ExitCode> {
         Ok(shared_state) => shared_state,
         Err(SharedCommandStateError::DependencyTree(error)) => {
             ui::print_failed_to_build_dependency_tree(&error);
+
             return Err(ExitCode::FAILURE);
         }
         Err(SharedCommandStateError::LockfileEntries(error)) => {
             ui::print_failed_to_read_lockfile_entries(&error);
+
             return Err(ExitCode::FAILURE);
         }
         Err(SharedCommandStateError::Verifier(error)) => {
             ui::print_verifier_init_failed(&error);
+
             return Err(ExitCode::FAILURE);
         }
     };
@@ -397,9 +409,10 @@ fn finalize_ci_run(params: FinalizeCiRunParams<'_>) -> ExitCode {
         lock_hash_before_verify,
     } = params;
     let is_text_output = matches!(args.format, OutputFormat::Text);
+    let should_print_final_report = should_print_report(&args.format, args.quiet);
 
     if args.dry_run {
-        if !args.quiet {
+        if should_print_final_report {
             print_report(PrintReportParams {
                 report,
                 output_format: &args.format,
@@ -458,7 +471,7 @@ fn finalize_ci_run(params: FinalizeCiRunParams<'_>) -> ExitCode {
         }
     }
 
-    if !args.quiet {
+    if should_print_final_report {
         print_report(PrintReportParams {
             report,
             output_format: &args.format,
@@ -493,8 +506,9 @@ fn finalize_install_run(params: FinalizeInstallRunParams<'_>) -> InstallExecutio
         lock_hash_before_verify,
     } = params;
     let is_text_output = matches!(args.format, OutputFormat::Text);
+    let should_print_final_report = should_print_report(&args.format, args.quiet);
 
-    if !args.quiet {
+    if should_print_final_report {
         print_report(PrintReportParams {
             report,
             output_format: &args.format,
@@ -633,7 +647,7 @@ async fn ensure_lockfile_exists(params: EnsureLockfileExistsParams<'_>) -> bool 
         quiet,
     } = params;
 
-    let lockfile_path = current_working_directory.join(crate::constants::PACKAGE_LOCK_FILE);
+    let lockfile_path = active_lockfile_path(current_working_directory);
 
     if lockfile_path.exists() {
         return true;
@@ -650,6 +664,7 @@ async fn ensure_lockfile_exists(params: EnsureLockfileExistsParams<'_>) -> bool 
             if !quiet {
                 ui::print_lockfile_created_notice();
             }
+            
             true
         }
         _ => {

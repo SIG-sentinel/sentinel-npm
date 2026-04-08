@@ -16,3 +16,13 @@ pub const NPM_ARG_NO_AUDIT: &str = "--no-audit";
 pub const NPM_ARG_NO_FUND: &str = "--no-fund";
 pub const NPM_ARG_SILENT: &str = "--silent";
 pub const NPM_ARG_IGNORE_SCRIPTS: &str = "--ignore-scripts";
+
+pub const YARN_LOCK_KEY_VERSION: &str = "version ";
+pub const YARN_LOCK_KEY_INTEGRITY: &str = "integrity ";
+pub const YARN_LOCK_SELECTOR_SEPARATOR: char = ',';
+
+pub const PNPM_LOCK_KEY_PACKAGES: &str = "packages";
+pub const PNPM_LOCK_KEY_RESOLUTION: &str = "resolution";
+pub const PNPM_LOCK_KEY_INTEGRITY: &str = "integrity";
+pub const PNPM_LOCK_KEY_DEV: &str = "dev";
+pub const PNPM_LOCK_PEER_SEPARATOR: char = '(';

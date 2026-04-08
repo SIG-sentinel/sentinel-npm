@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::path::Path;
+use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
 use indicatif::ProgressBar;
@@ -37,6 +38,14 @@ pub struct VerifyPackagesExecutionParams {
     pub max_concurrency: usize,
     pub progress_bar: Option<ProgressBar>,
     pub show_text_progress_fallback: bool,
+}
+
+pub struct UpdateVerificationProgressParams<'a> {
+    pub progress_bar: Option<&'a ProgressBar>,
+    pub show_text_progress_fallback: bool,
+    pub completed_counter: &'a AtomicUsize,
+    pub total_packages: usize,
+    pub progress_step: usize,
 }
 
 pub struct EnsureLockfileExistsForCheckParams<'a> {

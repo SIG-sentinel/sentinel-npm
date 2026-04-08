@@ -39,6 +39,13 @@ pub struct ExtractV1DepsParams<'a> {
     pub entries: &'a mut HashMap<String, LockfileEntry>,
 }
 
+pub struct FlushYarnEntryParams<'a> {
+    pub entries: &'a mut HashMap<String, LockfileEntry>,
+    pub selector: &'a mut Option<String>,
+    pub version: &'a mut Option<String>,
+    pub integrity: &'a mut Option<String>,
+}
+
 pub struct ResolveDependencyKeyParams<'a> {
     pub package_path: &'a str,
     pub dep_name: &'a str,

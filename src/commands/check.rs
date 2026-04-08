@@ -1,10 +1,11 @@
 use super::shared::{
     SharedCommandState, SharedCommandStateError, build_report, load_command_state, verify_packages,
 };
+use crate::ecosystem::active_lockfile_path;
 use crate::constants::{
     CHECK_MAX_CONCURRENCY, CHECK_MSG_INIT_FAILED_TEMPLATE, CHECK_PROGRESS_TEMPLATE,
     CHECK_PROGRESS_VERIFY_MSG, NPM_ERR_EXEC_FAILED_TEMPLATE, NPM_ERR_LOCKFILE_ONLY_FAILED_TEMPLATE,
-    PACKAGE_LOCK_FILE, render_template,
+    render_template,
 };
 use crate::output::print_report;
 use crate::types::{
@@ -24,7 +25,7 @@ async fn ensure_lockfile_exists(
         quiet,
     } = params;
 
-    let lockfile_path = current_working_directory.join(PACKAGE_LOCK_FILE);
+    let lockfile_path = active_lockfile_path(current_working_directory);
 
     if lockfile_path.exists() {
         return Ok(true);
@@ -128,7 +129,10 @@ async fn prepare_check_state(args: &CheckArgs) -> Result<PreparedCheckState, Exi
 
     let cycles = analysis.cycles.clone();
 
-    if !cycles.is_empty() && !args.quiet && is_text_output {
+    let has_dependency_cycles = !cycles.is_empty();
+    let should_display_cycles = has_dependency_cycles && !args.quiet && is_text_output;
+
+    if should_display_cycles {
         ui::print_dependency_cycles(&cycles);
     }
 

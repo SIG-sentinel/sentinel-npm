@@ -3,10 +3,10 @@ pub const UI_LABEL_TIP: &str = "Tip:";
 pub const UI_LABEL_SENTINEL: &str = "sentinel:";
 
 pub const UI_MSG_LOCKFILE_MISSING_NOTICE: &str =
-    "\n  {}  package-lock.json not found. Running `npm install --package-lock-only`...\n";
-pub const UI_MSG_LOCKFILE_CREATED_NOTICE: &str = "  {} package-lock.json created successfully\n";
+    "\n  {}  lockfile not found. Generating lockfile with the detected package manager...\n";
+pub const UI_MSG_LOCKFILE_CREATED_NOTICE: &str = "  {} lockfile created successfully\n";
 pub const UI_MSG_RESOLVING_PACKAGE_TEMPLATE: &str =
-    "\n  {}  resolving {} into package-lock.json before verification...\n";
+    "\n  {}  resolving {} into lockfile before verification...\n";
 pub const UI_MSG_RESOLVE_PACKAGE_INTO_LOCKFILE_FAILED_TEMPLATE: &str =
     "sentinel: Failed to resolve {} into lockfile";
 pub const UI_MSG_DEPENDENCY_CYCLES_HEADER_TEMPLATE: &str = "{}  {} dependency cycles detected!";
@@ -24,9 +24,9 @@ pub const UI_MSG_TARGET_PACKAGE_NOT_FOUND_TEMPLATE: &str =
     "sentinel: target package {} not found in lockfile after resolution";
 pub const UI_MSG_VERIFIER_INIT_FAILED_TEMPLATE: &str = "sentinel: init failed: {}";
 pub const UI_MSG_LOCKFILE_CHANGED_ABORT_INSTALL: &str =
-    "sentinel: package-lock.json changed after verification. Aborting install.";
+    "sentinel: lockfile changed after verification. Aborting install.";
 pub const UI_MSG_LOCKFILE_CHANGED_ABORT_CI: &str =
-    "sentinel: package-lock.json changed after verification. Aborting npm ci.";
+    "sentinel: lockfile changed after verification. Aborting clean install.";
 pub const UI_MSG_NPM_INSTALL_STATUS_FAILED_TEMPLATE: &str =
     "sentinel: npm install failed with exit code {}";
 pub const UI_MSG_NPM_CI_STATUS_FAILED_TEMPLATE: &str = "sentinel: npm ci failed with exit code {}";

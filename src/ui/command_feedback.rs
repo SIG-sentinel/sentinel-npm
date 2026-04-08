@@ -4,7 +4,7 @@ use std::path::Path;
 use colored::Colorize;
 
 use crate::constants::{
-    CHECK_MSG_PROGRESS_TEMPLATE, CLI_NAME, CLI_PREFIX_SENTINEL, INSTALL_MSG_CI_REPORT_TEMPLATE,
+    CHECK_MSG_PROGRESS_TEMPLATE, CHECK_MSG_VERIFY_PROGRESS_TEMPLATE, CLI_NAME, CLI_PREFIX_SENTINEL, INSTALL_MSG_CI_REPORT_TEMPLATE,
     INSTALL_MSG_DRY_RUN_TEMPLATE, INSTALL_MSG_SUCCESS_TEMPLATE, INSTALL_MSG_VERIFYING_TEMPLATE,
     OUTPUT_SYMBOL_ERROR, UI_MSG_BUILD_DEPENDENCY_TREE_FAILED_TEMPLATE,
     UI_MSG_DEPENDENCY_CYCLE_LINE_TEMPLATE, UI_MSG_DEPENDENCY_CYCLES_HEADER_TEMPLATE,
@@ -75,6 +75,20 @@ pub fn print_dependency_cycles(cycles: &[Vec<String>]) {
             )
         );
     }
+}
+
+pub fn print_verification_progress(completed: usize, total: usize, percentage: usize) {
+    eprintln!(
+        "{}",
+        render_template(
+            CHECK_MSG_VERIFY_PROGRESS_TEMPLATE,
+            &[
+                completed.to_string(),
+                total.to_string(),
+                percentage.to_string(),
+            ],
+        )
+    );
 }
 
 pub fn print_check_progress(package_count: usize) {

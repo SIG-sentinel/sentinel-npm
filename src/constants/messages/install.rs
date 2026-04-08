@@ -8,7 +8,7 @@ pub const INSTALL_MSG_SUCCESS_TEMPLATE: &str = "\n  {} {} package(s) installed a
 pub const INSTALL_MSG_CI_REPORT_TEMPLATE: &str = "\nsentinel ci: report saved to {}";
 pub const INSTALL_ERR_PACKAGE_NOT_IN_LOCKFILE_TEMPLATE: &str =
     "target package {} not found in lockfile after resolution";
-pub const INSTALL_ERR_LOCKFILE_GENERATE_FAILED: &str = "Failed to generate package-lock.json";
+pub const INSTALL_ERR_LOCKFILE_GENERATE_FAILED: &str = "Failed to generate lockfile";
 pub const INSTALL_MSG_OFFLINE_STRICT_FAIL: &str =
     "sentinel: offline mode cannot validate package integrity against npm registry in strict mode";
 pub const INSTALL_MSG_NPM_FAILED_TEMPLATE: &str = "npm install failed with code {}";

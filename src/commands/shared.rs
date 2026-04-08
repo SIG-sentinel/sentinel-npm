@@ -3,11 +3,12 @@ use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
-use crate::npm::{LockfileEntry, build_dependency_tree, read_npm_lockfile, read_package_json_deps};
+use crate::ecosystem::{build_dependency_tree_for_manager, read_lockfile_entries};
+use crate::npm::read_package_json_deps;
 use crate::types::{
     BuildLockfileEntryParams, DependencyTree, ReadPackageJsonDepsParams, Report, RunMode,
-    SentinelError, VerifierNewParams, VerifyPackagesExecutionParams, VerifyPackagesParams,
-    VerifyResult,
+    SentinelError, VerifierNewParams, VerifyPackagesExecutionParams, VerifyPackagesParams, VerifyResult,
+    LockfileEntry, UpdateVerificationProgressParams,
 };
 use crate::verifier::Verifier;
 
@@ -36,13 +37,15 @@ pub(super) fn validate_package_json_dependencies(
 pub(super) fn load_dependency_tree(
     current_working_directory: &Path,
 ) -> Result<DependencyTree, SentinelError> {
-    build_dependency_tree(current_working_directory)
+    let lockfile_entries = read_lockfile_entries(current_working_directory)?;
+    
+    build_dependency_tree_for_manager(current_working_directory, &lockfile_entries)
 }
 
 pub(super) fn load_lockfile_entries(
     current_working_directory: &Path,
 ) -> Result<Arc<HashMap<String, LockfileEntry>>, SentinelError> {
-    read_npm_lockfile(current_working_directory).map(Arc::new)
+    read_lockfile_entries(current_working_directory).map(Arc::new)
 }
 
 pub(super) fn load_command_state(
@@ -85,6 +88,40 @@ fn build_lockfile_entry(params: BuildLockfileEntryParams<'_>) -> LockfileEntry {
     }
 }
 
+fn update_verification_progress(params: UpdateVerificationProgressParams<'_>) {
+    let UpdateVerificationProgressParams {
+        progress_bar,
+        show_text_progress_fallback,
+        completed_counter,
+        total_packages,
+        progress_step,
+    } = params;
+
+    if let Some(progress_bar) = progress_bar {
+        progress_bar.inc(1);
+        
+        return;
+    }
+
+    if !show_text_progress_fallback {
+        return;
+    }
+
+    let completed = completed_counter.fetch_add(1, Ordering::Relaxed) + 1;
+    let is_first_update = completed == 1;
+    let is_last_update = completed == total_packages;
+    let reached_progress_step = completed % progress_step == 0;
+    let should_print_progress = is_first_update || is_last_update || reached_progress_step;
+
+    if !should_print_progress {
+        return;
+    }
+
+    let percentage = completed.saturating_mul(100) / total_packages.max(1);
+
+    crate::ui::print_verification_progress(completed, total_packages, percentage);
+}
+
 pub(super) async fn verify_packages(params: VerifyPackagesExecutionParams) -> Vec<VerifyResult> {
     let VerifyPackagesExecutionParams {
         verify_packages_params,
@@ -121,23 +158,16 @@ pub(super) async fn verify_packages(params: VerifyPackagesExecutionParams) -> Ve
                     lockfile_entries: lock_entries_ref.as_ref(),
                 });
                 let result = verifier_ref.check_from_lockfile(&entry).await;
+
                 drop(permit);
 
-                if let Some(progress_bar) = &progress_ref {
-                    progress_bar.inc(1);
-                } else if show_text_progress_fallback {
-                    let completed = completed_counter_ref.fetch_add(1, Ordering::Relaxed) + 1;
-                    if completed == 1
-                        || completed == total_packages
-                        || completed % progress_step == 0
-                    {
-                        let percentage = completed.saturating_mul(100) / total_packages.max(1);
-                        eprintln!(
-                            "  verifying packages: {}/{} ({}%)",
-                            completed, total_packages, percentage
-                        );
-                    }
-                }
+                update_verification_progress(UpdateVerificationProgressParams {
+                    progress_bar: progress_ref.as_ref(),
+                    show_text_progress_fallback,
+                    completed_counter: &completed_counter_ref,
+                    total_packages,
+                    progress_step,
+                });
 
                 result
             }

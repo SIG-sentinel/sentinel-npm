@@ -8,6 +8,13 @@ pub const NPM_ARG_SAVE_EXACT: &str = "--save-exact";
 pub const NPM_ARG_OMIT_DEV: &str = "--omit=dev";
 pub const NPM_ARG_OMIT_OPTIONAL: &str = "--omit=optional";
 
+pub const NPM_ARG_FROZEN_LOCKFILE: &str = "--frozen-lockfile";
+pub const NPM_ARG_EXACT: &str = "--exact";
+pub const NPM_ARG_LOCKFILE_ONLY: &str = "--lockfile-only";
+pub const NPM_ARG_MODE_UPDATE_LOCKFILE: &str = "--mode=update-lockfile";
+pub const NPM_ARG_PROD: &str = "--prod";
+pub const NPM_ARG_REPORTER_SILENT: &str = "--reporter=silent";
+
 pub const CLI_LONG_ABOUT: &str = "
 sentinel verifies npm packages by comparing their sha512 hash against
 npm's own dist.integrity field — before or after installation.

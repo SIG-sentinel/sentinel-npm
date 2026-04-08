@@ -42,6 +42,7 @@ async fn main() -> ExitCode {
 async fn run_report(args: &ReportArgs) -> ExitCode {
     ui::print_report_submission(PrintReportSubmissionParams {
         package_name: &args.package,
+        reason: &args.reason,
         evidence: args.evidence.as_deref(),
     });
 
