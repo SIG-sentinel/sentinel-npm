@@ -227,10 +227,10 @@ async fn prepare_install_state(args: &InstallArgs) -> Result<PreparedInstallStat
     } = shared_state;
 
     let analysis = dependency_tree.analyze();
-    if !analysis.cycles.is_empty() {
-        ui::print_dependency_cycles(&analysis.cycles);
+    let cycles = analysis.cycles.clone();
 
-        return Err(ExitCode::FAILURE);
+    if !cycles.is_empty() && !args.quiet {
+        ui::print_dependency_cycles(&cycles);
     }
 
     let packages_to_verify =
@@ -252,6 +252,7 @@ async fn prepare_install_state(args: &InstallArgs) -> Result<PreparedInstallStat
         verifier,
         lockfile_entries,
         lock_hash_before_verify,
+        cycles,
     })
 }
 
@@ -324,11 +325,10 @@ async fn prepare_ci_state(args: &CiArgs) -> Result<PreparedCiState, ExitCode> {
     } = shared_state;
 
     let analysis = dependency_tree.analyze();
-    let has_dependency_cycles = !analysis.cycles.is_empty();
+    let cycles = analysis.cycles.clone();
 
-    if has_dependency_cycles {
-        ui::print_dependency_cycles(&analysis.cycles);
-        return Err(ExitCode::FAILURE);
+    if !cycles.is_empty() && !args.quiet {
+        ui::print_dependency_cycles(&cycles);
     }
 
     let mut packages_to_verify: Vec<_> = dependency_tree.nodes.values().cloned().collect();
@@ -342,6 +342,7 @@ async fn prepare_ci_state(args: &CiArgs) -> Result<PreparedCiState, ExitCode> {
         verifier,
         lockfile_entries,
         lock_hash_before_verify,
+        cycles,
     })
 }
 
@@ -526,6 +527,7 @@ pub async fn run_install(args: &InstallArgs) -> ExitCode {
                 verifier,
                 lockfile_entries,
                 lock_hash_before_verify,
+                cycles,
             } = prepared_state;
 
             if !args.quiet {
@@ -554,7 +556,7 @@ pub async fn run_install(args: &InstallArgs) -> ExitCode {
             match install_blocked {
                 true => InstallExecutionOutcome::failure(),
                 false => {
-                    let report = build_report(crate::types::RunMode::Install, results);
+                    let report = build_report(crate::types::RunMode::Install, results, cycles);
 
                     finalize_install_run(FinalizeInstallRunParams {
                         args,
@@ -629,6 +631,7 @@ pub async fn run_ci(args: &CiArgs) -> ExitCode {
         verifier,
         lockfile_entries,
         lock_hash_before_verify,
+        cycles,
     } = prepared_state;
 
     if packages_to_verify.is_empty() {
@@ -667,7 +670,7 @@ pub async fn run_ci(args: &CiArgs) -> ExitCode {
         return ExitCode::FAILURE;
     }
 
-    let report = build_report(crate::types::RunMode::Ci, results);
+    let report = build_report(crate::types::RunMode::Ci, results, cycles);
 
     finalize_ci_run(FinalizeCiRunParams {
         args,
