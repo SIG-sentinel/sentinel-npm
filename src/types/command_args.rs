@@ -107,7 +107,7 @@ pub struct CiArgs {
     #[arg(long)]
     pub dry_run: bool,
 
-    #[arg(long, default_value = "json", value_enum)]
+    #[arg(long, default_value = "text", value_enum)]
     pub format: OutputFormat,
 
     #[arg(long, default_value = "sentinel-report.json")]

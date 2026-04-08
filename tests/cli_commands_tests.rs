@@ -63,7 +63,7 @@ fn test_ci_command_defaults() {
             assert!(!args.no_scripts);
             assert!(!args.dry_run);
             assert!(!args.quiet);
-            assert_eq!(args.format, OutputFormat::Json);
+            assert_eq!(args.format, OutputFormat::Text);
             assert_eq!(args.report.to_string_lossy(), "sentinel-report.json");
             assert_eq!(args.timeout, sentinel::constants::CI_REGISTRY_TIMEOUT_MS);
         }

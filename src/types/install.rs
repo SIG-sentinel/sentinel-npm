@@ -32,6 +32,7 @@ pub struct SaveCiReportParams<'a> {
     pub report: &'a Report,
     pub report_path: &'a Path,
     pub quiet: bool,
+    pub is_text_output: bool,
 }
 
 pub struct EnsureLockfileExistsParams<'a> {

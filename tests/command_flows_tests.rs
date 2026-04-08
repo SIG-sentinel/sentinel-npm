@@ -81,7 +81,12 @@ async fn test_check_run_succeeds_with_empty_graph() {
 #[tokio::test]
 async fn test_ci_run_succeeds_with_empty_graph() {
     let temp_dir = tempfile::tempdir().expect("tempdir should be created");
-    write_package_json(temp_dir.path());
+    // No external dependencies → packages_to_verify is empty → early exit, no report written
+    std::fs::write(
+        temp_dir.path().join("package.json"),
+        r#"{"name":"demo","version":"1.0.0","dependencies":{}}"#,
+    )
+    .expect("package.json should be written");
     write_empty_lockfile(temp_dir.path());
 
     let report_path = temp_dir.path().join("report.json");

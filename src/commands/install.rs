@@ -72,6 +72,7 @@ fn save_ci_report(params: SaveCiReportParams<'_>) {
         report,
         report_path,
         quiet,
+        is_text_output,
     } = params;
 
     match serde_json::to_string_pretty(report) {
@@ -82,7 +83,7 @@ fn save_ci_report(params: SaveCiReportParams<'_>) {
                 ui::print_save_report_failed(error);
             }
 
-            if write_result.is_ok() && !quiet {
+            if write_result.is_ok() && !quiet && is_text_output {
                 ui::print_ci_report_saved(report_path);
             }
         }
@@ -395,9 +396,26 @@ fn finalize_ci_run(params: FinalizeCiRunParams<'_>) -> ExitCode {
         report,
         lock_hash_before_verify,
     } = params;
+    let is_text_output = matches!(args.format, OutputFormat::Text);
 
     if args.dry_run {
-        ui::print_dry_run_complete(report.results.len());
+        if !args.quiet {
+            print_report(PrintReportParams {
+                report,
+                output_format: &args.format,
+            });
+        }
+
+        save_ci_report(SaveCiReportParams {
+            report,
+            report_path: &args.report,
+            quiet: args.quiet,
+            is_text_output,
+        });
+
+        if !args.quiet && is_text_output {
+            ui::print_dry_run_complete(report.results.len());
+        }
 
         return ExitCode::SUCCESS;
     }
@@ -451,6 +469,7 @@ fn finalize_ci_run(params: FinalizeCiRunParams<'_>) -> ExitCode {
         report,
         report_path: &args.report,
         quiet: args.quiet,
+        is_text_output,
     });
 
     let clean_results_count = report
@@ -459,7 +478,7 @@ fn finalize_ci_run(params: FinalizeCiRunParams<'_>) -> ExitCode {
         .filter(|result| result.verdict == Verdict::Clean)
         .count();
 
-    if !args.quiet {
+    if !args.quiet && is_text_output {
         ui::print_install_success(clean_results_count);
     }
 
@@ -473,6 +492,7 @@ fn finalize_install_run(params: FinalizeInstallRunParams<'_>) -> InstallExecutio
         report,
         lock_hash_before_verify,
     } = params;
+    let is_text_output = matches!(args.format, OutputFormat::Text);
 
     if !args.quiet {
         print_report(PrintReportParams {
@@ -482,7 +502,9 @@ fn finalize_install_run(params: FinalizeInstallRunParams<'_>) -> InstallExecutio
     }
 
     if args.dry_run {
-        ui::print_dry_run_complete(report.summary.total as usize);
+        if !args.quiet && is_text_output {
+            ui::print_dry_run_complete(report.summary.total as usize);
+        }
 
         return InstallExecutionOutcome::success(true);
     }
@@ -511,7 +533,7 @@ fn finalize_install_run(params: FinalizeInstallRunParams<'_>) -> InstallExecutio
 
     match install_status {
         Ok(status) if status.success() => {
-            if !args.quiet {
+            if !args.quiet && is_text_output {
                 ui::print_install_success(report.summary.clean as usize);
             }
 
