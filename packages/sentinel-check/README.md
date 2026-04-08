@@ -4,6 +4,8 @@
 
 Run Sentinel with npx, no manual binary setup required.
 
+Use `npx --yes sentinel-check ...` for one-shot runs.
+
 ---
 
 ## Quick start
@@ -12,22 +14,28 @@ Run Sentinel with npx, no manual binary setup required.
 
 ```bash
 # audit only
-npx -y -p sentinel-check check
+npx --yes sentinel-check check
 
 # validate lockfile then install dependencies
-npx -y -p sentinel-check ci
+npx --yes sentinel-check ci
 
 # install one package with verification
-npx -y -p sentinel-check install lodash@4.17.21
+npx --yes sentinel-check install lodash@4.17.21
 ```
 
 ### Add to package.json scripts (recommended)
 
+Install once in the project and call `sentinel` directly from npm scripts:
+
+```bash
+npm install -D sentinel-check
+```
+
 ```json
 {
   "scripts": {
-    "sentinel:check": "npx -y -p sentinel-check check",
-    "sentinel:ci": "npx -y -p sentinel-check ci"
+    "sentinel:check": "sentinel check",
+    "sentinel:ci": "sentinel ci"
   }
 }
 ```
@@ -40,7 +48,7 @@ npm run sentinel:ci
 Need package install with verification? Run it directly:
 
 ```bash
-npx -y -p sentinel-check install express@4.21.2
+npx --yes sentinel-check install express@4.21.2
 ```
 
 ---
@@ -51,7 +59,7 @@ GitHub Actions:
 
 ```yaml
 - name: Verify dependency integrity
-  run: npx -y -p sentinel-check ci
+  run: npx --yes sentinel-check ci
 ```
 
 ---
@@ -61,6 +69,7 @@ GitHub Actions:
 1. The wrapper downloads the matching Sentinel release binary on first use.
 2. Downloaded binaries are cached locally.
 3. Integrity is verified using release checksums before execution.
+4. If you see `dependency cycles detected`, Sentinel found circular dependency chains in the lockfile graph. **Verification continues and cycles are reported as a warning.** You'll still see the integrity status of all packages. To resolve cycles, regenerate your lockfile with `npm install` or update dependencies.
 
 ---
 
