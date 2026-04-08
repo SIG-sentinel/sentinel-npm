@@ -302,6 +302,15 @@ async fn prepare_ci_state(args: &CiArgs) -> Result<PreparedCiState, ExitCode> {
         return Err(ExitCode::FAILURE);
     }
 
+    // Keep lockfile aligned with package.json before verification so npm ci
+    // doesn't fail later with out-of-sync lock state (EUSAGE).
+    let lockfile_synced = sync_lockfile_with_package_json(&args.cwd);
+    if !lockfile_synced {
+        ui::print_generic_error(INSTALL_ERR_LOCKFILE_GENERATE_FAILED);
+
+        return Err(ExitCode::FAILURE);
+    }
+
     let lock_hash_before_verify = lockfile_sha256(&args.cwd);
 
     let shared_state = match load_command_state(&args.cwd, args.timeout) {
@@ -626,6 +635,12 @@ async fn ensure_lockfile_exists(params: EnsureLockfileExistsParams<'_>) -> bool 
             false
         }
     }
+}
+
+fn sync_lockfile_with_package_json(current_working_directory: &std::path::Path) -> bool {
+    let output = generate_lockfile(current_working_directory);
+
+    matches!(output, Ok(output) if output.status.success())
 }
 
 pub async fn run_ci(args: &CiArgs) -> ExitCode {
