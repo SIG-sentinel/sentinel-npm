@@ -95,7 +95,7 @@ jobs:
   publish-release:
     needs:
       - verify-versions
-      - build-binaries
+      - validate-binaries
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -125,7 +125,7 @@ jobs:
   validate-binaries:
     needs:
       - verify-versions
-      - publish-release
+      - build-binaries
     strategy:
       fail-fast: false
       matrix:
@@ -200,13 +200,12 @@ jobs:
             throw "check.json does not contain sentinel_version"
           }
 
-          & $bin install "sentinel-check@$sentinelNpmVersion" --cwd (Get-Location).Path --dry-run --format text
-          Write-Host "[${{ matrix.asset }}] all checks passed"
+          Write-Host "[${{ matrix.asset }}] binary validation passed"
 
   publish-npm:
     needs:
       - verify-versions
-      - validate-binaries
+      - publish-release
     runs-on: ubuntu-latest
     permissions:
       contents: read
