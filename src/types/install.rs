@@ -50,6 +50,7 @@ pub struct PreparedInstallState {
     pub verifier: Arc<Verifier>,
     pub lockfile_entries: Arc<HashMap<String, LockfileEntry>>,
     pub lock_hash_before_verify: Option<String>,
+    pub cycles: Vec<Vec<String>>,
 }
 
 pub struct PreparedCiState {
@@ -57,6 +58,7 @@ pub struct PreparedCiState {
     pub verifier: Arc<Verifier>,
     pub lockfile_entries: Arc<HashMap<String, LockfileEntry>>,
     pub lock_hash_before_verify: Option<String>,
+    pub cycles: Vec<Vec<String>>,
 }
 
 pub struct BlockedVerifyResults {
