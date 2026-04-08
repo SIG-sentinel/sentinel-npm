@@ -128,6 +128,7 @@ pub struct RunCleanInstallParams<'a> {
     pub ignore_scripts: bool,
     pub omit_dev: bool,
     pub omit_optional: bool,
+    pub silent_output: bool,
 }
 
 pub struct ResolvePackageIntoLockfileParams<'a> {

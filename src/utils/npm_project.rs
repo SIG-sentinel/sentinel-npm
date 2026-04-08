@@ -4,7 +4,7 @@ use std::process::{Command, ExitStatus, Output};
 use crate::constants::{
     NPM_ARG_CI, NPM_ARG_IGNORE_SCRIPTS, NPM_ARG_INSTALL, NPM_ARG_NO_AUDIT, NPM_ARG_NO_FUND,
     NPM_ARG_OMIT_DEV, NPM_ARG_OMIT_OPTIONAL, NPM_ARG_PACKAGE_LOCK_ONLY, NPM_ARG_SAVE_EXACT,
-    NPM_CMD,
+    NPM_ARG_SILENT, NPM_CMD,
 };
 use crate::types::{InstallPackageParams, ResolvePackageIntoLockfileParams, RunCleanInstallParams};
 
@@ -84,6 +84,7 @@ pub fn run_clean_install(params: RunCleanInstallParams<'_>) -> std::io::Result<E
         ignore_scripts,
         omit_dev,
         omit_optional,
+        silent_output,
     } = params;
 
     let mut command = npm_command(current_working_directory);
@@ -99,6 +100,7 @@ pub fn run_clean_install(params: RunCleanInstallParams<'_>) -> std::io::Result<E
             (omit_dev, NPM_ARG_OMIT_DEV),
             (omit_optional, NPM_ARG_OMIT_OPTIONAL),
             (ignore_scripts, NPM_ARG_IGNORE_SCRIPTS),
+            (silent_output, NPM_ARG_SILENT),
         ],
     );
 

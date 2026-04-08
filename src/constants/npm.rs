@@ -14,4 +14,5 @@ pub const NPM_ARG_OFFLINE: &str = "--offline";
 pub const NPM_ARG_PREFER_OFFLINE: &str = "--prefer-offline";
 pub const NPM_ARG_NO_AUDIT: &str = "--no-audit";
 pub const NPM_ARG_NO_FUND: &str = "--no-fund";
+pub const NPM_ARG_SILENT: &str = "--silent";
 pub const NPM_ARG_IGNORE_SCRIPTS: &str = "--ignore-scripts";
