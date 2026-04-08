@@ -1,6 +1,6 @@
 {
   "name": "sentinel-check",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "User-friendly command wrappers for Sentinel CLI",
   "license": "MIT",
   "repository": {
