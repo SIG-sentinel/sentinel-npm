@@ -57,7 +57,7 @@ npx --yes sentinel-check ci
 npx --yes sentinel-check check
 
 # install a specific package with verification
-npx --yes sentinel-check install sentinel-check
+npx --yes sentinel-check install sentinel-check@1.1.0
 ```
 
 > Important: in clean environments, avoid `npx sentinel ...` because npm may resolve a different package named `sentinel`. Use `npx --yes sentinel-check ...`.
@@ -85,7 +85,7 @@ Pin a specific version:
 
 ```bash
 curl -fsSL -o /tmp/install-sentinel.sh https://raw.githubusercontent.com/SIG-sentinel/sentinel-npm/main/scripts/install.sh
-sh /tmp/install-sentinel.sh --version 1.0.0
+sh /tmp/install-sentinel.sh --version 1.1.0
 ```
 
 Confirm installation:
@@ -118,7 +118,7 @@ Usage:
 ```bash
 npm run sentinel:ci
 npm run sentinel:check
-npx --yes sentinel-check install sentinel-check
+npx --yes sentinel-check install sentinel-check@1.1.0
 ```
 
 ### Using sentinel binary on PATH
@@ -137,7 +137,7 @@ Usage:
 ```bash
 npm run sentinel:ci
 npm run sentinel:check
-sentinel install sentinel-check
+sentinel install sentinel-check@1.1.0
 ```
 
 ---

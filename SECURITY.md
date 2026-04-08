@@ -186,6 +186,11 @@ Operational note: the project does invoke external package-manager commands such
 
 ## Version History
 
+- **v1.1.0** (2026-04-08)
+  - Multi-package-manager lockfile support for npm, Yarn, and pnpm
+  - Stronger install and CI verification safeguards
+  - Expanded adversarial and ecosystem test coverage
+
 - **v0.1.0** (2026-04-07)
   - Initial release
   - Lockfile + tarball verification
