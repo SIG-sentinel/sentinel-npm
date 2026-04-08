@@ -134,6 +134,6 @@ pub(super) async fn verify_packages(params: VerifyPackagesExecutionParams) -> Ve
     results
 }
 
-pub(super) fn build_report(mode: RunMode, results: Vec<VerifyResult>) -> Report {
-    Report::from_results(mode, results)
+pub(super) fn build_report(mode: RunMode, results: Vec<VerifyResult>, cycles: Vec<Vec<String>>) -> Report {
+    Report::from_results(mode, results, cycles)
 }
