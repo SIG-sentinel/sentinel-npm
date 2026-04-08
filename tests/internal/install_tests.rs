@@ -1,7 +1,11 @@
-use super::{ensure_lockfile_exists, parse_package_ref};
+use super::{
+    ensure_lockfile_exists, finalize_ci_run, finalize_install_run, parse_package_ref,
+    should_print_report,
+};
 use crate::cache::LocalCache;
 use crate::types::{
-    EnsureLockfileExistsParams, Evidence, InstallArgs, OutputFormat, PackageRef,
+    CiArgs, EnsureLockfileExistsParams, Evidence, FinalizeCiRunParams, FinalizeInstallRunParams,
+    InstallArgs, OutputFormat, PackageRef, Report, RunMode,
     RestoreProjectFilesSnapshotParams, VerifyResult,
 };
 use crate::utils::{
@@ -59,6 +63,83 @@ fn test_parse_package_ref_missing_version() {
 }
 
 #[test]
+fn test_should_print_report_suppresses_quiet_text_output() {
+    let should_print = should_print_report(&OutputFormat::Text, true);
+
+    assert!(!should_print);
+}
+
+#[test]
+fn test_should_print_report_keeps_quiet_json_output() {
+    let should_print = should_print_report(&OutputFormat::Json, true);
+
+    assert!(should_print);
+}
+
+#[test]
+fn test_finalize_ci_run_aborts_when_lockfile_hash_changes_before_install() {
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    std::fs::write(temp_dir.path().join("package-lock.json"), "{}")
+        .expect("lockfile should be written");
+
+    let args = CiArgs {
+        omit_dev: false,
+        omit_optional: false,
+        allow_scripts: false,
+        no_scripts: false,
+        dry_run: false,
+        format: OutputFormat::Json,
+        report: temp_dir.path().join("report.json"),
+        cwd: temp_dir.path().to_path_buf(),
+        timeout: 1000,
+        quiet: true,
+    };
+
+    let report = Report::from_results(RunMode::Ci, vec![], vec![]);
+    let previous_hash = Some("different-hash-before-verify".to_string());
+
+    let exit = finalize_ci_run(FinalizeCiRunParams {
+        args: &args,
+        report: &report,
+        lock_hash_before_verify: &previous_hash,
+    });
+
+    assert_eq!(exit, ExitCode::FAILURE);
+}
+
+#[test]
+fn test_finalize_install_run_aborts_when_lockfile_hash_changes_before_install() {
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    std::fs::write(temp_dir.path().join("package-lock.json"), "{}")
+        .expect("lockfile should be written");
+
+    let args = InstallArgs {
+        package: "lodash@4.17.21".to_string(),
+        allow_scripts: false,
+        no_scripts: true,
+        dry_run: false,
+        format: OutputFormat::Json,
+        cwd: temp_dir.path().to_path_buf(),
+        timeout: 1000,
+        quiet: true,
+    };
+
+    let report = Report::from_results(RunMode::Install, vec![], vec![]);
+    let package_ref = PackageRef::new("lodash", "4.17.21");
+    let previous_hash = Some("different-hash-before-verify".to_string());
+
+    let outcome = finalize_install_run(FinalizeInstallRunParams {
+        args: &args,
+        package_ref: &package_ref,
+        report: &report,
+        lock_hash_before_verify: &previous_hash,
+    });
+
+    assert_eq!(outcome.exit_code, ExitCode::FAILURE);
+    assert!(outcome.should_restore_snapshot);
+}
+
+#[test]
 fn test_lockfile_sha256_changes_after_mutation() {
     let temp_dir = tempfile::tempdir().expect("tempdir should be created");
     let lockfile = temp_dir.path().join("package-lock.json");
@@ -67,6 +148,24 @@ fn test_lockfile_sha256_changes_after_mutation() {
 
     std::fs::write(&lockfile, "{\"name\":\"demo\",\"version\":\"1.0.0\"}")
         .expect("lockfile should be mutated");
+    let after = lockfile_sha256(temp_dir.path()).expect("hash after should exist");
+
+    assert_ne!(before, after);
+}
+
+#[test]
+fn test_lockfile_sha256_uses_active_yarn_lockfile() {
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let lockfile = temp_dir.path().join("yarn.lock");
+    std::fs::write(&lockfile, "pkg@^1.0.0:\n  version \"1.0.0\"\n")
+        .expect("yarn.lock should be written");
+    let before = lockfile_sha256(temp_dir.path()).expect("hash before should exist");
+
+    std::fs::write(
+        &lockfile,
+        "pkg@^1.0.0:\n  version \"1.0.1\"\n  integrity \"sha512-test\"\n",
+    )
+    .expect("yarn.lock should be mutated");
     let after = lockfile_sha256(temp_dir.path()).expect("hash after should exist");
 
     assert_ne!(before, after);
@@ -139,6 +238,38 @@ fn test_dry_run_blocked_path_keeps_no_mutation_after_rollback() {
         !lockfile.exists(),
         "package-lock.json should be removed after rollback"
     );
+}
+
+#[test]
+fn test_snapshot_restore_supports_yarn_lockfile() {
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let package_json = temp_dir.path().join("package.json");
+    let lockfile = temp_dir.path().join("yarn.lock");
+
+    let original_package_json = b"{\"name\":\"demo\",\"version\":\"1.0.0\"}";
+    let original_lockfile = b"pkg@^1.0.0:\n  version \"1.0.0\"\n";
+
+    std::fs::write(&package_json, original_package_json).expect("package.json should be written");
+    std::fs::write(&lockfile, original_lockfile).expect("yarn.lock should be written");
+
+    let snapshot = capture_project_files_snapshot(temp_dir.path());
+
+    std::fs::write(&package_json, b"{\"name\":\"demo\",\"private\":true}")
+        .expect("mutated package.json should be written");
+    std::fs::write(&lockfile, b"pkg@^1.0.0:\n  version \"9.9.9\"\n")
+        .expect("mutated yarn.lock should be written");
+
+    restore_project_files_snapshot(RestoreProjectFilesSnapshotParams {
+        snapshot: &snapshot,
+        current_working_directory: temp_dir.path(),
+    })
+    .expect("snapshot restore should succeed");
+
+    let restored_package_json = std::fs::read(&package_json).expect("package.json should exist");
+    let restored_lockfile = std::fs::read(&lockfile).expect("yarn.lock should exist");
+
+    assert_eq!(restored_package_json, original_package_json);
+    assert_eq!(restored_lockfile, original_lockfile);
 }
 
 #[tokio::test]
