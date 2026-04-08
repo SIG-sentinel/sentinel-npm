@@ -15,7 +15,8 @@ use crate::types::{
     BlockedVerifyResults, CiArgs, CollectInstallPackagesParams, DependencyNode,
     EnsureLockfileExistsParams, FinalizeCiRunParams, FinalizeInstallRunParams, InstallArgs,
     InstallBlockReason, InstallExecutionOutcome, InstallPackageParams, InstallPolicyInput,
-    PackageRef, PrepareLockfileForInstallParams, PreparedCiState, PreparedInstallState,
+    OutputFormat, PackageRef, PrepareLockfileForInstallParams, PreparedCiState,
+    PreparedInstallState,
     PrintBlockReasonResultsParams, PrintCiBlockingResultsParams, PrintReportParams,
     ProgressBarConfig, ResolveInstallPolicyParams, ResolvePackageIntoLockfileParams,
     RestoreProjectFilesSnapshotParams, RunCleanInstallParams, SaveCiReportParams, Verdict,
@@ -25,7 +26,7 @@ use crate::ui::command_feedback as ui;
 use crate::utils::{
     capture_project_files_snapshot, create_progress_bar, generate_lockfile, install_package,
     lockfile_sha256, resolve_package_into_lockfile, restore_project_files_snapshot,
-    run_clean_install,
+    run_clean_install, should_render_progress_bar,
 };
 
 fn parse_package_ref(spec: &str) -> Option<PackageRef> {
@@ -228,8 +229,9 @@ async fn prepare_install_state(args: &InstallArgs) -> Result<PreparedInstallStat
 
     let analysis = dependency_tree.analyze();
     let cycles = analysis.cycles.clone();
+    let is_text_output = matches!(args.format, OutputFormat::Text);
 
-    if !cycles.is_empty() && !args.quiet {
+    if !cycles.is_empty() && !args.quiet && is_text_output {
         ui::print_dependency_cycles(&cycles);
     }
 
@@ -326,8 +328,9 @@ async fn prepare_ci_state(args: &CiArgs) -> Result<PreparedCiState, ExitCode> {
 
     let analysis = dependency_tree.analyze();
     let cycles = analysis.cycles.clone();
+    let is_text_output = matches!(args.format, OutputFormat::Text);
 
-    if !cycles.is_empty() && !args.quiet {
+    if !cycles.is_empty() && !args.quiet && is_text_output {
         ui::print_dependency_cycles(&cycles);
     }
 
@@ -413,6 +416,7 @@ fn finalize_ci_run(params: FinalizeCiRunParams<'_>) -> ExitCode {
         ignore_scripts: policy_decision.ignore_scripts,
         omit_dev: args.omit_dev,
         omit_optional: args.omit_optional,
+        silent_output: !matches!(args.format, OutputFormat::Text),
     });
 
     match install_status {
@@ -530,14 +534,18 @@ pub async fn run_install(args: &InstallArgs) -> ExitCode {
                 cycles,
             } = prepared_state;
 
-            if !args.quiet {
+            let is_text_output = matches!(args.format, OutputFormat::Text);
+
+            if !args.quiet && is_text_output {
                 ui::print_install_verification_started(packages_to_verify.len());
             }
 
-            let verify_progress_bar = create_progress_bar(ProgressBarConfig {
-                length: packages_to_verify.len(),
-                message: INSTALL_PROGRESS_VERIFY_MSG,
-                template: INSTALL_PROGRESS_TEMPLATE,
+            let verify_progress_bar = should_render_progress_bar(&args.format, args.quiet).then(|| {
+                create_progress_bar(ProgressBarConfig {
+                    length: packages_to_verify.len(),
+                    message: INSTALL_PROGRESS_VERIFY_MSG,
+                    template: INSTALL_PROGRESS_TEMPLATE,
+                })
             });
 
             let results = verify_packages(VerifyPackagesExecutionParams {
@@ -547,7 +555,7 @@ pub async fn run_install(args: &InstallArgs) -> ExitCode {
                     lockfile_entries,
                 },
                 max_concurrency: INSTALL_MAX_CONCURRENCY,
-                progress_bar: Some(verify_progress_bar),
+                progress_bar: verify_progress_bar,
             })
             .await;
 
@@ -640,14 +648,18 @@ pub async fn run_ci(args: &CiArgs) -> ExitCode {
         return ExitCode::SUCCESS;
     }
 
-    if !args.quiet {
+    let is_text_output = matches!(args.format, OutputFormat::Text);
+
+    if !args.quiet && is_text_output {
         ui::print_install_verification_started(packages_to_verify.len());
     }
 
-    let verify_progress_bar = create_progress_bar(ProgressBarConfig {
-        length: packages_to_verify.len(),
-        message: INSTALL_PROGRESS_VERIFY_MSG,
-        template: INSTALL_PROGRESS_TEMPLATE,
+    let verify_progress_bar = should_render_progress_bar(&args.format, args.quiet).then(|| {
+        create_progress_bar(ProgressBarConfig {
+            length: packages_to_verify.len(),
+            message: INSTALL_PROGRESS_VERIFY_MSG,
+            template: INSTALL_PROGRESS_TEMPLATE,
+        })
     });
 
     let results = verify_packages(VerifyPackagesExecutionParams {
@@ -657,7 +669,7 @@ pub async fn run_ci(args: &CiArgs) -> ExitCode {
             lockfile_entries,
         },
         max_concurrency: INSTALL_MAX_CONCURRENCY,
-        progress_bar: Some(verify_progress_bar),
+        progress_bar: verify_progress_bar,
     })
     .await;
 
