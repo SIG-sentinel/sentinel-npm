@@ -302,8 +302,6 @@ async fn prepare_ci_state(args: &CiArgs) -> Result<PreparedCiState, ExitCode> {
         return Err(ExitCode::FAILURE);
     }
 
-    // Keep lockfile aligned with package.json before verification so npm ci
-    // doesn't fail later with out-of-sync lock state (EUSAGE).
     let lockfile_synced = sync_lockfile_with_package_json(&args.cwd);
     if !lockfile_synced {
         ui::print_generic_error(INSTALL_ERR_LOCKFILE_GENERATE_FAILED);
