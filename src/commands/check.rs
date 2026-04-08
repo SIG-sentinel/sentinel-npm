@@ -2,17 +2,18 @@ use super::shared::{
     SharedCommandState, SharedCommandStateError, build_report, load_command_state, verify_packages,
 };
 use crate::constants::{
-    CHECK_MAX_CONCURRENCY, CHECK_MSG_INIT_FAILED_TEMPLATE, NPM_ERR_EXEC_FAILED_TEMPLATE,
-    NPM_ERR_LOCKFILE_ONLY_FAILED_TEMPLATE, PACKAGE_LOCK_FILE, render_template,
+    CHECK_MAX_CONCURRENCY, CHECK_MSG_INIT_FAILED_TEMPLATE, CHECK_PROGRESS_TEMPLATE,
+    CHECK_PROGRESS_VERIFY_MSG, NPM_ERR_EXEC_FAILED_TEMPLATE, NPM_ERR_LOCKFILE_ONLY_FAILED_TEMPLATE,
+    PACKAGE_LOCK_FILE, render_template,
 };
 use crate::output::print_report;
 use crate::types::{
     CheckArgs, CollectPackagesToVerifyParams, DependencyNode, EnsureLockfileExistsForCheckParams,
-    PreparedCheckState, PrintReportParams, SentinelError, VerifyPackagesExecutionParams,
-    VerifyPackagesParams,
+    OutputFormat, PreparedCheckState, PrintReportParams, ProgressBarConfig, SentinelError,
+    VerifyPackagesExecutionParams, VerifyPackagesParams,
 };
 use crate::ui::command_feedback as ui;
-use crate::utils::generate_lockfile;
+use crate::utils::{create_progress_bar, generate_lockfile, should_render_progress_bar};
 use std::process::ExitCode;
 
 async fn ensure_lockfile_exists(
@@ -119,14 +120,15 @@ async fn prepare_check_state(args: &CheckArgs) -> Result<PreparedCheckState, Exi
     } = shared_state;
 
     let analysis = dependency_tree.analyze();
+    let is_text_output = matches!(args.format, OutputFormat::Text);
 
-    if !args.quiet {
+    if !args.quiet && is_text_output {
         ui::print_check_progress(analysis.total_packages);
     }
 
     let cycles = analysis.cycles.clone();
 
-    if !cycles.is_empty() && !args.quiet {
+    if !cycles.is_empty() && !args.quiet && is_text_output {
         ui::print_dependency_cycles(&cycles);
     }
 
@@ -164,6 +166,15 @@ pub async fn run(args: &CheckArgs) -> ExitCode {
         return ExitCode::SUCCESS;
     }
 
+    let progress_bar = match should_render_progress_bar(&args.format, args.quiet) {
+        true => Some(create_progress_bar(ProgressBarConfig {
+            length: packages_to_verify.len(),
+            message: CHECK_PROGRESS_VERIFY_MSG,
+            template: CHECK_PROGRESS_TEMPLATE,
+        })),
+        false => None,
+    };
+
     let results = verify_packages(VerifyPackagesExecutionParams {
         verify_packages_params: VerifyPackagesParams {
             packages_to_verify,
@@ -171,7 +182,7 @@ pub async fn run(args: &CheckArgs) -> ExitCode {
             lockfile_entries,
         },
         max_concurrency: CHECK_MAX_CONCURRENCY,
-        progress_bar: None,
+        progress_bar,
     })
     .await;
 
