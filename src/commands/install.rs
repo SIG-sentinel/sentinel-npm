@@ -554,6 +554,8 @@ pub async fn run_install(args: &InstallArgs) -> ExitCode {
                     template: INSTALL_PROGRESS_TEMPLATE,
                 })
             });
+            let show_text_progress_fallback =
+                verify_progress_bar.is_none() && !args.quiet && is_text_output;
 
             let results = verify_packages(VerifyPackagesExecutionParams {
                 verify_packages_params: VerifyPackagesParams {
@@ -563,6 +565,7 @@ pub async fn run_install(args: &InstallArgs) -> ExitCode {
                 },
                 max_concurrency: INSTALL_MAX_CONCURRENCY,
                 progress_bar: verify_progress_bar,
+                show_text_progress_fallback,
             })
             .await;
 
@@ -674,6 +677,7 @@ pub async fn run_ci(args: &CiArgs) -> ExitCode {
             template: INSTALL_PROGRESS_TEMPLATE,
         })
     });
+    let show_text_progress_fallback = verify_progress_bar.is_none() && !args.quiet && is_text_output;
 
     let results = verify_packages(VerifyPackagesExecutionParams {
         verify_packages_params: VerifyPackagesParams {
@@ -683,6 +687,7 @@ pub async fn run_ci(args: &CiArgs) -> ExitCode {
         },
         max_concurrency: INSTALL_MAX_CONCURRENCY,
         progress_bar: verify_progress_bar,
+        show_text_progress_fallback,
     })
     .await;
 

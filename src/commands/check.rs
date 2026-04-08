@@ -166,7 +166,10 @@ pub async fn run(args: &CheckArgs) -> ExitCode {
         return ExitCode::SUCCESS;
     }
 
-    let progress_bar = match should_render_progress_bar(&args.format, args.quiet) {
+    let is_text_output = matches!(args.format, OutputFormat::Text);
+    let should_render_bar = should_render_progress_bar(&args.format, args.quiet);
+
+    let progress_bar = match should_render_bar {
         true => Some(create_progress_bar(ProgressBarConfig {
             length: packages_to_verify.len(),
             message: CHECK_PROGRESS_VERIFY_MSG,
@@ -183,6 +186,7 @@ pub async fn run(args: &CheckArgs) -> ExitCode {
         },
         max_concurrency: CHECK_MAX_CONCURRENCY,
         progress_bar,
+        show_text_progress_fallback: !should_render_bar && !args.quiet && is_text_output,
     })
     .await;
 

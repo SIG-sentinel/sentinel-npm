@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::path::Path;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 use crate::npm::{LockfileEntry, build_dependency_tree, read_npm_lockfile, read_package_json_deps};
@@ -89,6 +90,7 @@ pub(super) async fn verify_packages(params: VerifyPackagesExecutionParams) -> Ve
         verify_packages_params,
         max_concurrency,
         progress_bar,
+        show_text_progress_fallback,
     } = params;
 
     let VerifyPackagesParams {
@@ -96,6 +98,10 @@ pub(super) async fn verify_packages(params: VerifyPackagesExecutionParams) -> Ve
         verifier,
         lockfile_entries,
     } = verify_packages_params;
+
+    let total_packages = packages_to_verify.len();
+    let progress_step = total_packages.max(10) / 10;
+    let completed_counter = Arc::new(AtomicUsize::new(0));
 
     let concurrency_gate = Arc::new(tokio::sync::Semaphore::new(max_concurrency));
 
@@ -106,6 +112,7 @@ pub(super) async fn verify_packages(params: VerifyPackagesExecutionParams) -> Ve
             let gate_ref = concurrency_gate.clone();
             let progress_ref = progress_bar.clone();
             let lock_entries_ref = lockfile_entries.clone();
+            let completed_counter_ref = completed_counter.clone();
 
             async move {
                 let permit = gate_ref.acquire().await.ok();
@@ -118,6 +125,18 @@ pub(super) async fn verify_packages(params: VerifyPackagesExecutionParams) -> Ve
 
                 if let Some(progress_bar) = &progress_ref {
                     progress_bar.inc(1);
+                } else if show_text_progress_fallback {
+                    let completed = completed_counter_ref.fetch_add(1, Ordering::Relaxed) + 1;
+                    if completed == 1
+                        || completed == total_packages
+                        || completed % progress_step == 0
+                    {
+                        let percentage = completed.saturating_mul(100) / total_packages.max(1);
+                        eprintln!(
+                            "  verifying packages: {}/{} ({}%)",
+                            completed, total_packages, percentage
+                        );
+                    }
                 }
 
                 result

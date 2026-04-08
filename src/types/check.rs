@@ -36,6 +36,7 @@ pub struct VerifyPackagesExecutionParams {
     pub verify_packages_params: VerifyPackagesParams,
     pub max_concurrency: usize,
     pub progress_bar: Option<ProgressBar>,
+    pub show_text_progress_fallback: bool,
 }
 
 pub struct EnsureLockfileExistsForCheckParams<'a> {

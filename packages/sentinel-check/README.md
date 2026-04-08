@@ -69,7 +69,7 @@ GitHub Actions:
 1. The wrapper downloads the matching Sentinel release binary on first use.
 2. Downloaded binaries are cached locally.
 3. Integrity is verified using release checksums before execution.
-4. If you see `dependency cycles detected`, Sentinel found circular dependency chains in the lockfile graph. **Verification continues and cycles are reported as a warning.** You'll still see the integrity status of all packages. To resolve cycles, regenerate your lockfile with `npm install` or update dependencies.
+4. If you see `dependency cycles detected`, Sentinel found circular dependency chains in the lockfile graph. **Verification continues and cycles are reported as a warning.** You'll still see the integrity status of all packages. For a safe first recovery step, remove `node_modules` and rerun `npx --yes sentinel-check ci`. If lockfile recovery is needed, remove `package-lock.json` and rerun `npx --yes sentinel-check ci` so Sentinel regenerates it in the guarded flow.
 
 ---
 

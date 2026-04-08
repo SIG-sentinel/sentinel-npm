@@ -155,7 +155,7 @@ sentinel install lodash@4.17.21
 
 ## Add to package.json
 
-### Using npx
+ on scripts
 
 ```json
 {
@@ -185,8 +185,10 @@ Usage:
 npm run sentinel:ci
 npm run sentinel:check
 npm run sentinel:install -- express@4.21.2
+
 ```
-### Using npx
+
+### Using npx on scripts
 
 ```json
 {
@@ -221,6 +223,7 @@ npm run sentinel:ci
 npm run sentinel:check
 sentinel install express@4.21.2
 ```
+
 ---
 
 ## CI/CD integration
@@ -261,7 +264,7 @@ sentinel ci --dry-run --format json --report sentinel-report.json
 | `UNVERIFIABLE` | could not confirm the chain | installation blocked |
 | `COMPROMISED` | divergence detected | installation blocked |
 
-If Sentinel prints `dependency cycles detected`, the dependency graph contains circular chains. Sentinel will **continue verification and report cycles as a warning** (not a blocker). This allows you to see package integrity status despite cycles. To resolve, see [Treating Dependency Cycles](RELEASE_QUICK_START.md).
+If Sentinel prints `dependency cycles detected`, the dependency graph contains circular chains. Sentinel will **continue verification and report cycles as a warning** (not a blocker). This allows you to see package integrity status despite cycles. For a safe first recovery step, remove `node_modules` and rerun `sentinel ci` (or `npx --yes sentinel-check ci`). If lockfile recovery is needed, remove `package-lock.json` and rerun `sentinel ci` so Sentinel regenerates it in the guarded flow. For more detail, see [Treating Dependency Cycles](RELEASE_QUICK_START.md).
 
 ---
 
