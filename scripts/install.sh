@@ -45,7 +45,6 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
-# Validate REPO to prevent URL injection (must be owner/repo)
 case "$REPO" in
   [A-Za-z0-9._-]*/[A-Za-z0-9._-]*)
     ;;
