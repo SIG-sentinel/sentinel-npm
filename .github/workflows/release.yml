@@ -122,10 +122,68 @@ jobs:
             dist/sentinel-*
             dist/checksums.txt
 
-  publish-npm:
+  validate-binaries:
     needs:
       - verify-versions
       - publish-release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            asset: sentinel-linux-x64
+          - os: macos-13
+            asset: sentinel-darwin-x64
+          - os: macos-14
+            asset: sentinel-darwin-arm64
+          - os: windows-latest
+            asset: sentinel-windows-x64.exe
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 20
+
+      - name: Download release binary
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh release download "${{ needs.verify-versions.outputs.version }}" \
+            --repo "${{ github.repository }}" \
+            --pattern "${{ matrix.asset }}" \
+            --dir .
+
+      - name: Make executable
+        if: runner.os != 'Windows'
+        run: chmod +x ./${{ matrix.asset }}
+
+      - name: Version smoke test
+        shell: bash
+        run: ./${{ matrix.asset }} --version
+
+      - name: Functional smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p testapp && cd testapp
+          npm init -y >/dev/null
+          npm install lodash express >/dev/null
+          BIN="$GITHUB_WORKSPACE/${{ matrix.asset }}"
+          "$BIN" check --cwd "$(pwd)" --format text
+          "$BIN" ci --cwd "$(pwd)" --dry-run --format text
+          "$BIN" ci --cwd "$(pwd)" --no-scripts --format json --report ../r.json > ../ci.json
+          grep -q "sentinel_version" ../ci.json
+          test -f ../r.json
+          "$BIN" install lodash@4.17.21 --cwd "$(pwd)" --dry-run --format text
+          echo "[${{ matrix.asset }}] all checks passed"
+
+  publish-npm:
+    needs:
+      - verify-versions
+      - validate-binaries
     runs-on: ubuntu-latest
     permissions:
       contents: read
