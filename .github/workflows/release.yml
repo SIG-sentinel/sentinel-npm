@@ -95,7 +95,7 @@ jobs:
   publish-release:
     needs:
       - verify-versions
-      - build-binaries
+      - validate-binaries
     runs-on: ubuntu-latest
     permissions:
       contents: write
