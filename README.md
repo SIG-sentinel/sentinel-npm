@@ -68,14 +68,16 @@ Good for quick evaluation, ephemeral environments, and CI.
 
 ```bash
 # verify the whole project and, if clean, run npm ci
-npx -y -p sentinel-check ci
+npx --yes sentinel-check ci
 
 # audit the project without installing anything
-npx -y -p sentinel-check check
+npx --yes sentinel-check check
 
 # install a specific package with verification
-npx -y -p sentinel-check install express@4.21.2
+npx --yes sentinel-check install express@4.21.2
 ```
+
+> Important: in clean environments, avoid `npx sentinel ...` because npm may resolve a different package named `sentinel`. Use `npx --yes sentinel-check ...`.
 
 ### Option B: binary on PATH
 
@@ -158,9 +160,9 @@ sentinel install lodash@4.17.21
 ```json
 {
   "scripts": {
-    "sentinel:ci": "npx -y -p sentinel-check ci",
-    "sentinel:check": "npx -y -p sentinel-check check",
-    "sentinel:install": "npx -y -p sentinel-check install"
+    "sentinel:ci": "npx --yes sentinel-check ci",
+    "sentinel:check": "npx --yes sentinel-check check",
+    "sentinel:install": "npx --yes sentinel-check install"
   }
 }
 ```
@@ -189,8 +191,8 @@ npm run sentinel:install -- express@4.21.2
 ```json
 {
   "scripts": {
-    "sentinel:ci": "npx -y -p sentinel-check ci",
-    "sentinel:check": "npx -y -p sentinel-check check"
+    "sentinel:ci": "npx --yes sentinel-check ci",
+    "sentinel:check": "npx --yes sentinel-check check"
   }
 }
 ```
@@ -198,7 +200,7 @@ npm run sentinel:install -- express@4.21.2
 To install a specific package with verification, pass the argument directly:
 
 ```bash
-npx -y -p sentinel-check install express@4.21.2
+npx --yes sentinel-check install express@4.21.2
 ```
 
 ### Using the binary on PATH
@@ -227,7 +229,7 @@ sentinel install express@4.21.2
 
 ```yaml
 - name: Verify dependency integrity
-  run: npx -y -p sentinel-check ci
+  run: npx --yes sentinel-check ci
 ```
 
 ### GitHub Actions with installed binary
@@ -258,6 +260,8 @@ sentinel ci --dry-run --format json --report sentinel-report.json
 | `CLEAN` | integrity confirmed | installation allowed |
 | `UNVERIFIABLE` | could not confirm the chain | installation blocked |
 | `COMPROMISED` | divergence detected | installation blocked |
+
+If Sentinel prints `dependency cycles detected`, the dependency graph contains circular chains. Sentinel will **continue verification and report cycles as a warning** (not a blocker). This allows you to see package integrity status despite cycles. To resolve, see [Treating Dependency Cycles](RELEASE_QUICK_START.md).
 
 ---
 
