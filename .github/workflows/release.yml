@@ -132,8 +132,6 @@ jobs:
         include:
           - os: ubuntu-latest
             asset: sentinel-linux-x64
-          - os: macos-13
-            asset: sentinel-darwin-x64
           - os: macos-14
             asset: sentinel-darwin-arm64
           - os: windows-latest
@@ -164,7 +162,8 @@ jobs:
         shell: bash
         run: ./${{ matrix.asset }} --version
 
-      - name: Functional smoke test
+      - name: Functional smoke test (Unix)
+        if: runner.os != 'Windows'
         shell: bash
         run: |
           set -euo pipefail
@@ -180,6 +179,33 @@ jobs:
           test -f ../r.json
           "$BIN" install "sentinel-check@${SENTINEL_NPM_VERSION}" --cwd "$(pwd)" --dry-run --format text
           echo "[${{ matrix.asset }}] all checks passed"
+
+      - name: Functional smoke test (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path testapp -Force | Out-Null
+          Set-Location testapp
+          npm init -y | Out-Null
+          npm install lodash express | Out-Null
+
+          $bin = Join-Path $env:GITHUB_WORKSPACE "${{ matrix.asset }}"
+          $sentinelNpmVersion = (npm view sentinel-check version).Trim()
+
+          & $bin check --cwd (Get-Location).Path --format text
+          & $bin ci --cwd (Get-Location).Path --dry-run --format text
+          & $bin ci --cwd (Get-Location).Path --no-scripts --format json --report ..\r.json > ..\ci.json
+
+          if (-not (Select-String -Path ..\ci.json -Pattern "sentinel_version" -Quiet)) {
+            throw "ci.json does not contain sentinel_version"
+          }
+
+          if (-not (Test-Path ..\r.json)) {
+            throw "Expected report file ..\\r.json was not created"
+          }
+
+          & $bin install "sentinel-check@$sentinelNpmVersion" --cwd (Get-Location).Path --dry-run --format text
+          Write-Host "[${{ matrix.asset }}] all checks passed"
 
   publish-npm:
     needs:
