@@ -144,7 +144,7 @@ jobs:
     steps:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: 20
+          node-version: 24
 
       - name: Download release binary
         env:
@@ -172,12 +172,13 @@ jobs:
           npm init -y >/dev/null
           npm install lodash express >/dev/null
           BIN="$GITHUB_WORKSPACE/${{ matrix.asset }}"
+          SENTINEL_NPM_VERSION="$(npm view sentinel-check version)"
           "$BIN" check --cwd "$(pwd)" --format text
           "$BIN" ci --cwd "$(pwd)" --dry-run --format text
           "$BIN" ci --cwd "$(pwd)" --no-scripts --format json --report ../r.json > ../ci.json
           grep -q "sentinel_version" ../ci.json
           test -f ../r.json
-          "$BIN" install sentinel-check --cwd "$(pwd)" --dry-run --format text
+          "$BIN" install "sentinel-check@${SENTINEL_NPM_VERSION}" --cwd "$(pwd)" --dry-run --format text
           echo "[${{ matrix.asset }}] all checks passed"
 
   publish-npm:
