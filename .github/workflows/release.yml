@@ -174,7 +174,7 @@ jobs:
           SENTINEL_NPM_VERSION="$(npm view sentinel-check version)"
           "$BIN" check --cwd "$(pwd)" --format text
           "$BIN" ci --cwd "$(pwd)" --dry-run --format text
-          "$BIN" ci --cwd "$(pwd)" --no-scripts --format json --report ../r.json > ../ci.json
+          "$BIN" ci --cwd "$(pwd)" --dry-run --no-scripts --format json --report ../r.json > ../ci.json
           grep -q "sentinel_version" ../ci.json
           test -f ../r.json
           "$BIN" install "sentinel-check@${SENTINEL_NPM_VERSION}" --cwd "$(pwd)" --dry-run --format text
@@ -194,7 +194,7 @@ jobs:
 
           & $bin check --cwd (Get-Location).Path --format text
           & $bin ci --cwd (Get-Location).Path --dry-run --format text
-          & $bin ci --cwd (Get-Location).Path --no-scripts --format json --report ..\r.json > ..\ci.json
+          & $bin ci --cwd (Get-Location).Path --dry-run --no-scripts --format json --report ..\r.json > ..\ci.json
 
           if (-not (Select-String -Path ..\ci.json -Pattern "sentinel_version" -Quiet)) {
             throw "ci.json does not contain sentinel_version"
