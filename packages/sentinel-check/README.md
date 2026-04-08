@@ -2,9 +2,7 @@
 
 > Thin npm wrapper for the `sentinel` CLI published from the [sentinel-npm](https://github.com/SIG-sentinel/sentinel-npm) repository.
 
-Run Sentinel with npx, no manual binary setup required.
-
-Use `npx --yes sentinel-check ...` for one-shot runs.
+Use `npx --yes sentinel-check ...` for one-shot runs with no manual binary setup.
 
 ---
 
@@ -25,7 +23,7 @@ npx --yes sentinel-check install lodash@4.17.21
 
 ### Add to package.json scripts (recommended)
 
-Install once in the project and call `sentinel` directly from npm scripts:
+Install once in the project and call `sentinel` from npm scripts:
 
 ```bash
 npm install -D sentinel-check

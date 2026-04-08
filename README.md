@@ -43,23 +43,6 @@ This repository has two entry points:
 
 ---
 
-## How the flow works
-
-```mermaid
-flowchart LR
-    A[package-lock.json] --> B[sentinel ci]
-    B --> C[Verify each dependency]
-    C --> D{Verification result}
-    D -- CLEAN --> E[Run npm ci]
-    D -- UNVERIFIABLE --> F[Block installation]
-    D -- COMPROMISED --> F
-    E --> G[node_modules ready]
-```
-
-If the project does not yet have a `package-lock.json`, Sentinel will attempt to generate one before verifying.
-
----
-
 ## Get started in 30 seconds
 
 ### Option A: no installation needed
@@ -102,7 +85,7 @@ Pin a specific version:
 
 ```bash
 curl -fsSL -o /tmp/install-sentinel.sh https://raw.githubusercontent.com/SIG-sentinel/sentinel-npm/main/scripts/install.sh
-sh /tmp/install-sentinel.sh --version 0.1.0
+sh /tmp/install-sentinel.sh --version 1.0.0
 ```
 
 Confirm installation:
@@ -113,82 +96,13 @@ sentinel --version
 
 #### Windows
 
-The supported path today is a manual binary download from [github.com/SIG-sentinel/sentinel-npm/releases](https://github.com/SIG-sentinel/sentinel-npm/releases), followed by checksum verification using `checksums.txt`.
+Use manual binary download from [github.com/SIG-sentinel/sentinel-npm/releases](https://github.com/SIG-sentinel/sentinel-npm/releases), then validate with `checksums.txt`.
 
 ---
 
-## Real usage examples
+## Add to package.json scripts
 
-### 1. Audit without installing
-
-```bash
-sentinel check
-```
-
-### 2. Verify the full lockfile and then install
-
-```bash
-sentinel ci
-```
-
-### 3. Dry-run verification without touching `node_modules`
-
-```bash
-sentinel ci --dry-run
-```
-
-### 4. Skip dev dependencies in the pipeline
-
-```bash
-sentinel ci --omit-dev
-```
-
-### 5. Install an exact package with verification
-
-```bash
-sentinel install lodash@4.17.21
-```
-
-> `sentinel install` requires an exact version. Tags like `latest` and ranges like `^4.0.0` are not accepted.
-
----
-
-## Add to package.json
-
- on scripts
-
-```json
-{
-  "scripts": {
-    "sentinel:ci": "npx --yes sentinel-check ci",
-    "sentinel:check": "npx --yes sentinel-check check",
-    "sentinel:install": "npx --yes sentinel-check install"
-  }
-}
-```
-
-### Using the binary on PATH
-
-```json
-{
-  "scripts": {
-    "sentinel:ci": "sentinel ci",
-    "sentinel:check": "sentinel check",
-    "sentinel:install": "sentinel install"
-  }
-}
-```
-
-Usage:
-
-```bash
-npm run sentinel:ci
-npm run sentinel:check
-npm run sentinel:install -- express@4.21.2
-
-```
-
-### Using npx on scripts
+### Using npx wrapper scripts
 
 ```json
 {
@@ -199,13 +113,15 @@ npm run sentinel:install -- express@4.21.2
 }
 ```
 
-To install a specific package with verification, pass the argument directly:
+Usage:
 
 ```bash
+npm run sentinel:ci
+npm run sentinel:check
 npx --yes sentinel-check install express@4.21.2
 ```
 
-### Using the binary on PATH
+### Using sentinel binary on PATH
 
 ```json
 {
@@ -254,6 +170,8 @@ sentinel check --format github
 sentinel ci --dry-run --format json --report sentinel-report.json
 ```
 
+If the project does not yet have a `package-lock.json`, Sentinel will attempt to generate one before verifying.
+
 ---
 
 ## How to interpret results
@@ -265,29 +183,3 @@ sentinel ci --dry-run --format json --report sentinel-report.json
 | `COMPROMISED` | divergence detected | installation blocked |
 
 If Sentinel prints `dependency cycles detected`, the dependency graph contains circular chains. Sentinel will **continue verification and report cycles as a warning** (not a blocker). This allows you to see package integrity status despite cycles. For a safe first recovery step, remove `node_modules` and rerun `sentinel ci` (or `npx --yes sentinel-check ci`). If lockfile recovery is needed, remove `package-lock.json` and rerun `sentinel ci` so Sentinel regenerates it in the guarded flow. For more detail, see [Treating Dependency Cycles](RELEASE_QUICK_START.md).
-
----
-
-## Main components
-
-```text
-sentinel-npm/
-├── src/commands/          check, install, ci, and report commands
-├── src/verifier/          lockfile and tarball verification
-├── src/npm/               package-lock, package.json, and registry integration
-├── src/policy/            blocking rules and script execution policy
-├── src/ui/                terminal output and report formats
-├── src/types/             domain-typed contracts
-├── src/constants/         messages and configuration
-├── src/crypto.rs          hashing and integrity validation
-├── src/cache.rs           local verification cache
-└── packages/sentinel-check/ npm wrapper for npx and Node environments
-```
-
----
-
-## Status
-
-![build](https://img.shields.io/badge/build-passing-brightgreen)
-![clippy](https://img.shields.io/badge/clippy-clean-brightgreen)
-![tests](https://img.shields.io/badge/tests-passing-brightgreen)
