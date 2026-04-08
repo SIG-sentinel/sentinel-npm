@@ -9,9 +9,11 @@ This repository, `sentinel-npm`, publishes two related artifacts:
 
 This document explains the security model of the Sentinel npm workflow and the operational guarantees that exist today.
 
+For attacker model and trust-boundary details, see [THREAT_MODEL.md](THREAT_MODEL.md).
+
 ## Security Model
 
-Sentinel uses **npm's immutable dist.integrity field** as source of truth:
+Sentinel uses package-registry integrity metadata as source of truth for npm ecosystem lockfiles:
 
 ```text
 DOWNLOAD VERIFICATION (happens for every install):
@@ -20,12 +22,12 @@ DOWNLOAD VERIFICATION (happens for every install):
   3. Compare against npm's published dist.integrity → PASS or FAIL
 
 LOCKFILE VERIFICATION (happens before install):
-  1. Read package-lock.json entries
+  1. Read detected lockfile entries (`package-lock.json`, `yarn.lock`, or `pnpm-lock.yaml`)
   2. Query npm registry for latest published hashes
   3. Compare lockfile hashes vs registry → MATCH, DIVERGE, or UNVERIFIABLE
 
 INSTALLATION VERIFICATION (Sentinel: before/after):
-  1. All above checks pass → permit npm install
+  1. All above checks pass → permit manager-specific install
   2. Any check fails → block installation, prevent TOCTOU window
 ```
 
@@ -57,7 +59,7 @@ sentinel check
 ```yaml
 # GitHub Actions: gate on supply chain integrity
 - name: Verify dependencies
-  run: npx -y -p sentinel-check ci
+  run: npx --yes sentinel-check ci
 ```
 
 **CI mode enforces:**
@@ -65,7 +67,7 @@ sentinel check
 - ❌ No `UNVERIFIABLE` packages
 - ❌ No `COMPROMISED` packages
 - ✅ JSON report for audit trail by default
-- ✅ Non-zero exit code on any blocking result or failed `npm ci`
+- ✅ Non-zero exit code on any blocking result or failed guarded install
 
 ### Cache Behavior
 
@@ -99,12 +101,15 @@ sha256sum -c /tmp/checksums.txt sentinel-linux-x64
 
 The npm wrapper (`sentinel-check`) does not implement verification itself. It resolves or downloads the `sentinel` binary and forwards all arguments to it:
 
+- downloaded binaries are validated against published release checksums before execution
+- wrapper execution fails when binary integrity validation fails
+
 ```bash
 # Install via npm (recommended for CI)
 npm install -g sentinel-check
 
 # Use via npx (no installation)
-npx -y -p sentinel-check ci
+npx --yes sentinel-check ci
 ```
 
 ## Reporting Security Issues
@@ -112,12 +117,13 @@ npx -y -p sentinel-check ci
 If you discover a vulnerability:
 
 1. **Do NOT open a public GitHub issue**
-2. Email: [security@sig-sentinel.org](mailto:security@sig-sentinel.org)
+2. Open a **private GitHub Security Advisory** in this repository (`Security` tab)
 3. Include:
-   - Description of vulnerability
-   - Steps to reproduce
-   - Suggested fix (if any)
-   - Your contact information
+
+    - Description of vulnerability
+    - Steps to reproduce
+    - Suggested fix (if any)
+    - Preferred response channel in the advisory thread
 
 We will:
 
@@ -143,7 +149,7 @@ Sentinel is a supply chain security tool, so the repository aims to keep the tru
 - **Open source** code available for audit
 - **Pinned release workflow actions** for GitHub Actions publishing
 
-Operational note: the project does invoke external package-manager commands such as `npm ci` and `npm install` as part of the guarded workflow. That behavior is intentional and part of the trust boundary.
+Operational note: the project invokes external package-manager commands (`npm`, `yarn`, `pnpm`) as part of the guarded workflow. That behavior is intentional and part of the trust boundary.
 
 ## Limitations
 
@@ -186,14 +192,16 @@ Operational note: the project does invoke external package-manager commands such
 
 ## Version History
 
+- **v1.1.1** (2026-04-08)
+  - Documentation hardening for multi-manager adoption and CI guidance
+  - Security disclosure flow moved to private GitHub Security Advisory path
+  - Wrapper binary-checksum verification explicitly documented
+
 - **v1.1.0** (2026-04-08)
   - Multi-package-manager lockfile support for npm, Yarn, and pnpm
   - Stronger install and CI verification safeguards
   - Expanded adversarial and ecosystem test coverage
 
-- **v0.1.0** (2026-04-07)
-  - Initial release
-  - Lockfile + tarball verification
-  - Cache with TTL
-  - CI mode with strict enforcement
-  - JSON/JUnit/GitHub output formats
+- **Pre-1.0 series** (2026-04-07 to 2026-04-08)
+  - Early iterations and release hardening leading to the v1.1.0 baseline
+  - See GitHub Releases for granular pre-1.0 tags and notes

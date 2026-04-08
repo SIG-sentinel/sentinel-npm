@@ -4,6 +4,8 @@
 
 Use `npx --yes sentinel-check ...` for one-shot runs with no manual binary setup.
 
+Sentinel supports lockfile verification for npm, Yarn, and pnpm with automatic manager detection.
+
 ---
 
 ## Quick start
@@ -18,7 +20,7 @@ npx --yes sentinel-check check
 npx --yes sentinel-check ci
 
 # install one package with verification
-npx --yes sentinel-check install sentinel-check@1.1.0
+npx --yes sentinel-check install lodash@4.17.21
 ```
 
 ### Add to package.json scripts (recommended)
@@ -46,7 +48,7 @@ npm run sentinel:ci
 Need package install with verification? Run it directly:
 
 ```bash
-npx --yes sentinel-check install sentinel-check@1.1.0
+npx --yes sentinel-check install lodash@4.17.21
 ```
 
 ---
@@ -67,7 +69,13 @@ GitHub Actions:
 1. The wrapper downloads the matching Sentinel release binary on first use.
 2. Downloaded binaries are cached locally.
 3. Integrity is verified using release checksums before execution.
-4. If you see `dependency cycles detected`, Sentinel found circular dependency chains in the lockfile graph. **Verification continues and cycles are reported as a warning.** You'll still see the integrity status of all packages. For a safe first recovery step, remove `node_modules` and rerun `npx --yes sentinel-check ci`. If lockfile recovery is needed, remove `package-lock.json` and rerun `npx --yes sentinel-check ci` so Sentinel regenerates it in the guarded flow.
+4. If you see `dependency cycles detected`, Sentinel found circular dependency chains in the lockfile graph. **Verification continues and cycles are reported as a warning.** You'll still see the integrity status of all packages. For a safe first recovery step, remove `node_modules` and rerun `npx --yes sentinel-check ci`. If lockfile recovery is needed, remove the lockfile and rerun `npx --yes sentinel-check ci` so Sentinel regenerates it in the guarded flow.
+
+## More documentation
+
+- Security policy: [../../SECURITY.md](../../SECURITY.md)
+- Threat model: [../../THREAT_MODEL.md](../../THREAT_MODEL.md)
+- Adoption and distribution guide: [../../ADOPTION_DISTRIBUTION.md](../../ADOPTION_DISTRIBUTION.md)
 
 ---
 
