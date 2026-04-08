@@ -1,7 +1,7 @@
 {
   "name": "sentinel-check",
-  "version": "1.1.0",
-  "description": "User-friendly command wrappers for Sentinel CLI",
+  "version": "1.1.1",
+  "description": "Security gate for npm, yarn and pnpm: verifies lockfile integrity and tarball hashes before installation",
   "license": "MIT",
   "repository": {
     "type": "git",
