@@ -71,33 +71,7 @@ Keep positioning short and concrete:
 - Sentinel supports cache-assisted operation, while strict CI still blocks unverifiable dependencies.
 - Sentinel provides CI-native outputs (JSON, JUnit, GitHub annotations).
 
-## Distribution roadmap
-
-Current:
+## Current distribution channels
 
 - GitHub Releases (binary artifacts + checksums)
 - npm wrapper package: `sentinel-check`
-
-Planned channels:
-
-1. winget (status: planned)
-2. Homebrew tap (status: planned)
-3. scoop (status: planned)
-4. chocolatey (status: planned)
-5. GitHub Action Marketplace listing (status: planned)
-
-## Suggested execution order
-
-1. Publish winget manifest for immediate Windows install parity.
-2. Publish Homebrew tap for one-command macOS/Linux install.
-3. Add scoop/choco for Windows ecosystem coverage.
-4. Add install matrix section to README after first channel lands.
-
-## Messaging snippets
-
-Use these snippets in docs/release notes:
-
-- "Supports npm, Yarn, and pnpm lockfiles with auto-detection."
-- "Verifies lockfile and tarball integrity before installation."
-- "Blocks compromised or unverifiable packages in CI."
-- "Produces JSON, JUnit, and GitHub annotation outputs for evidence."
