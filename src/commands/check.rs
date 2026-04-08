@@ -124,12 +124,10 @@ async fn prepare_check_state(args: &CheckArgs) -> Result<PreparedCheckState, Exi
         ui::print_check_progress(analysis.total_packages);
     }
 
-    let has_dependency_cycles = !analysis.cycles.is_empty();
+    let cycles = analysis.cycles.clone();
 
-    if has_dependency_cycles {
-        ui::print_dependency_cycles(&analysis.cycles);
-
-        return Err(ExitCode::FAILURE);
+    if !cycles.is_empty() && !args.quiet {
+        ui::print_dependency_cycles(&cycles);
     }
 
     let packages_to_verify = collect_packages_to_verify(CollectPackagesToVerifyParams {
@@ -141,6 +139,7 @@ async fn prepare_check_state(args: &CheckArgs) -> Result<PreparedCheckState, Exi
         verifier,
         lockfile_entries,
         packages_to_verify,
+        cycles,
     })
 }
 
@@ -154,6 +153,7 @@ pub async fn run(args: &CheckArgs) -> ExitCode {
         verifier,
         lockfile_entries,
         packages_to_verify,
+        cycles,
     } = prepared_state;
 
     if packages_to_verify.is_empty() {
@@ -175,7 +175,7 @@ pub async fn run(args: &CheckArgs) -> ExitCode {
     })
     .await;
 
-    let report = build_report(crate::types::RunMode::Check, results);
+    let report = build_report(crate::types::RunMode::Check, results, cycles);
 
     print_report(PrintReportParams {
         report: &report,
