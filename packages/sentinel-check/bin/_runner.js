@@ -222,7 +222,17 @@ function fetchBuffer(url, redirectCount = 0) {
       request.destroy(new Error(`request timed out after ${DOWNLOAD_TIMEOUT_MS}ms`));
     });
 
-    request.on("error", reject);
+    request.on("error", (err) => {
+      if (err.code === "SELF_SIGNED_CERT_IN_CHAIN" || err.code === "UNABLE_TO_VERIFY_LEAF_SIGNATURE") {
+        reject(new Error(
+          `${err.message}\n` +
+          "hint: a TLS-intercepting proxy or corporate firewall is replacing certificates.\n" +
+          "hint: set NODE_EXTRA_CA_CERTS=/path/to/corporate-ca.pem before running sentinel ci, sentinel check or sentinel install."
+        ));
+        return;
+      }
+      reject(err);
+    });
   });
 }
 
