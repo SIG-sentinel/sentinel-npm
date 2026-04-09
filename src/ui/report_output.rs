@@ -16,7 +16,7 @@ use crate::constants::{
     OUTPUT_NEXT_ACTION_INSTALL_DEFAULT, OUTPUT_NEXT_ACTION_STRICT_CI,
     OUTPUT_NEXT_ACTION_STRICT_INSTALL, OUTPUT_REASON_MISSING_FROM_LOCKFILE,
     OUTPUT_REASON_NO_INTEGRITY_FIELD, OUTPUT_REASON_REGISTRY_OFFLINE,
-    OUTPUT_REASON_REGISTRY_TIMEOUT, OUTPUT_STATUS_ALL_CLEAN, OUTPUT_STATUS_BLOCKED,
+    OUTPUT_REASON_REGISTRY_TIMEOUT, OUTPUT_REASON_TARBALL_TOO_LARGE, OUTPUT_STATUS_ALL_CLEAN, OUTPUT_STATUS_BLOCKED,
     OUTPUT_STATUS_WARNINGS, OUTPUT_SUMMARY_LINE_TEMPLATE, OUTPUT_SYMBOL_WARNING, UI_LABEL_NEXT,
     UI_LABEL_TIP, render_template, render_with_error,
 };
@@ -31,6 +31,7 @@ fn unverifiable_reason_text(reason: &UnverifiableReason) -> &'static str {
         UnverifiableReason::RegistryOffline => OUTPUT_REASON_REGISTRY_OFFLINE,
         UnverifiableReason::RegistryTimeout => OUTPUT_REASON_REGISTRY_TIMEOUT,
         UnverifiableReason::MissingFromLockfile => OUTPUT_REASON_MISSING_FROM_LOCKFILE,
+        UnverifiableReason::TarballTooLarge => OUTPUT_REASON_TARBALL_TOO_LARGE,
     }
 }
 
@@ -206,7 +207,7 @@ pub fn print_install_blocked_unverifiable(results: &[VerifyResult]) {
         matches!(
             result.verdict,
             Verdict::Unverifiable {
-                reason: UnverifiableReason::RegistryOffline | UnverifiableReason::RegistryTimeout
+                reason: UnverifiableReason::RegistryOffline | UnverifiableReason::RegistryTimeout | UnverifiableReason::TarballTooLarge
             }
         )
     });

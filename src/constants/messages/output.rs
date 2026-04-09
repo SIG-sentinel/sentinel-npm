@@ -8,6 +8,7 @@ pub const OUTPUT_REASON_NO_INTEGRITY_FIELD: &str = "no integrity field (old pack
 pub const OUTPUT_REASON_REGISTRY_OFFLINE: &str = "registry offline";
 pub const OUTPUT_REASON_REGISTRY_TIMEOUT: &str = "registry timeout";
 pub const OUTPUT_REASON_MISSING_FROM_LOCKFILE: &str = "not in lockfile";
+pub const OUTPUT_REASON_TARBALL_TOO_LARGE: &str = "tarball too large";
 
 pub const OUTPUT_NEXT_ACTION_COMPROMISED: &str =
     "  {} run 'sentinel report <package>' for each compromised package.";

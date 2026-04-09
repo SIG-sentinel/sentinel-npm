@@ -32,6 +32,7 @@ pub enum UnverifiableReason {
     RegistryOffline,
     RegistryTimeout,
     MissingFromLockfile,
+    TarballTooLarge,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
