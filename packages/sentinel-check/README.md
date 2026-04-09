@@ -73,9 +73,9 @@ GitHub Actions:
 
 ## More documentation
 
-- Security policy: [../../SECURITY.md](../../SECURITY.md)
-- Threat model: [../../THREAT_MODEL.md](../../THREAT_MODEL.md)
-- Adoption and distribution guide: [../../ADOPTION_DISTRIBUTION.md](../../ADOPTION_DISTRIBUTION.md)
+- Security policy: [SECURITY.md](https://github.com/SIG-sentinel/sentinel-npm/blob/main/SECURITY.md)
+- Threat model: [THREAT_MODEL.md](https://github.com/SIG-sentinel/sentinel-npm/blob/main/THREAT_MODEL.md)
+- Adoption and distribution guide: [ADOPTION_DISTRIBUTION.md](https://github.com/SIG-sentinel/sentinel-npm/blob/main/ADOPTION_DISTRIBUTION.md)
 
 ---
 
