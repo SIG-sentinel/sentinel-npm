@@ -212,6 +212,16 @@ Operational note: the project invokes external package-manager commands (`npm`, 
 
 ## Version History
 
+- **v1.2.1** (2026-04-09)
+  - Actionable diagnostic hints for lockfile generation failures (ERESOLVE, missing PM, network)
+  - Error messages now include detected package manager name and recovery commands
+  - Per-manager Docker smoke tests for npm, Yarn, and pnpm via sentinel-check wrapper
+
+- **v1.2.0** (2026-04-09)
+  - Dependency-tree integrity verification with cycle detection
+  - Transitive dependency coverage in check, ci, and install commands
+  - Expanded test matrix for deep dependency graphs
+
 - **v1.1.1** (2026-04-08)
   - Documentation hardening for multi-manager adoption and CI guidance
   - Security disclosure flow moved to private GitHub Security Advisory path
