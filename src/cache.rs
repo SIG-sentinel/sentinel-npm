@@ -4,8 +4,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use rusqlite::{Connection, params};
 
 use crate::constants::{
-    SENTINEL_CACHE_DB_FILE, SENTINEL_HOME_DIR, SQL_DELETE_CACHE_BY_KEY, SQL_INIT_CACHE_SCHEMA,
-    SQL_SELECT_CACHE_BY_KEY, SQL_UPSERT_CACHE, UNVERIFIABLE_CACHE_TTL_SECS,
+    CLEAN_CACHE_TTL_SECS, SENTINEL_CACHE_DB_FILE, SENTINEL_HOME_DIR, SQL_DELETE_CACHE_BY_KEY,
+    SQL_INIT_CACHE_SCHEMA, SQL_SELECT_CACHE_BY_KEY, SQL_UPSERT_CACHE,
+    UNVERIFIABLE_CACHE_TTL_SECS,
 };
 use crate::types::{PackageRef, SentinelError, Verdict, VerifyResult};
 
@@ -77,7 +78,7 @@ impl LocalCache {
     pub fn put(&self, result: &VerifyResult) {
         if !matches!(result.verdict, Verdict::Compromised { .. }) {
             let ttl_secs = match &result.verdict {
-                Verdict::Clean => None,
+                Verdict::Clean => Some(CLEAN_CACHE_TTL_SECS),
                 Verdict::Unverifiable { .. } => Some(UNVERIFIABLE_CACHE_TTL_SECS),
                 Verdict::Compromised { .. } => None,
             };
