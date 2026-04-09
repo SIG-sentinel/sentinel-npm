@@ -9,7 +9,7 @@
 ![npm version](https://img.shields.io/npm/v/sentinel-check)
 ![npm downloads](https://img.shields.io/npm/dm/sentinel-check)
 
-Package managers install fast. **sentinel** adds a trust gate before that: it verifies the lockfile, registry metadata, and tarball integrity, and only allows installation when the whole chain checks out.
+Package managers already verify tarball integrity against the lockfile during install. **sentinel** adds a defense-in-depth layer on top: it cross-checks lockfile integrity, registry metadata, and the downloaded tarball hash — three independent sources — before any package is installed or any lifecycle script runs.
 
 Sentinel automatically works with `package-lock.json`, `yarn.lock`, and `pnpm-lock.yaml`.
 
@@ -24,16 +24,16 @@ This repository has two entry points:
 
 ## What you get
 
-| Capability | Package managers alone | sentinel |
-| --- | --- | --- |
-| Install dependencies | ✅ | ✅ |
-| Audit lockfile without installing | ❌ | ✅ |
-| Auto-detect npm/yarn/pnpm lockfile | ❌ | ✅ |
-| Validate tarball integrity | ❌ | ✅ |
-| Validate lockfile against registry | ❌ | ✅ |
-| Block a compromised package | ❌ | ✅ |
-| Security gate for CI | ❌ | ✅ |
-| Machine-readable output | ❌ | ✅ |
+| Capability | `npm ci` | `npm audit` | sentinel |
+| --- | --- | --- | --- |
+| Verify tarball vs lockfile | ✅ | ❌ | ✅ |
+| Cross-check registry metadata | ❌ | ❌ | ✅ |
+| Verify all packages before installing any | ❌ | ❌ | ✅ |
+| TOCTOU protection (lockfile re-check) | ❌ | ❌ | ✅ |
+| Audit without installing | ❌ | ✅ | ✅ |
+| Auto-detect npm/yarn/pnpm | ❌ | ❌ | ✅ |
+| Machine-readable CI output (JSON/JUnit/GitHub) | ❌ | ✅ | ✅ |
+| Zero SaaS / zero telemetry | ✅ | ❌ | ✅ |
 
 ### Lockfile detection flow
 
@@ -220,22 +220,43 @@ The secure order in CI is: generate/sync lockfile first, run `sentinel ci`, and 
 
 ## Why this model
 
-Sentinel is a cryptographic consistency gate, not only a known-bad package list.
+`npm ci` already verifies tarball integrity against the lockfile. Sentinel adds value in three areas:
 
-Concrete example:
+1. **Third source (registry metadata)** — `npm ci` checks tarball vs lockfile (2 sources). Sentinel adds the registry's `dist.integrity` as a third cross-check, catching lockfile injection where the lockfile points to a malicious URL that serves a tarball matching the injected hash.
+2. **Pre-install gate** — `npm ci` verifies and installs per-package atomically: if package A passes, its lifecycle scripts run before package B is verified. Sentinel verifies **all** packages before installing **any**, so no lifecycle script executes until the entire tree is clean.
+3. **TOCTOU protection** — Sentinel re-checks the lockfile hash between verification and install. No other tool does this.
 
-1. A package version is not yet present in any threat feed or blocklist.
-2. The tarball served by the registry path is changed unexpectedly.
-3. Sentinel compares lockfile integrity and registry metadata and blocks install on mismatch.
+```text
+lockfile says:      pkg@1.2.3 has sha512-A
+registry says:      pkg@1.2.3 has sha512-A
+downloaded tarball:  computed hash = sha512-A
+→ All agree → CLEAN
+→ Any divergence → COMPROMISED, install blocked
+```
 
-A known-bad list can only block what is already listed. Sentinel can also block integrity divergence when there is no prior signature in a blacklist.
+**Explicit limitation:** If an attacker publishes through a compromised maintainer account, the registry serves consistent metadata and tarball. All three sources agree on the malicious content, and Sentinel passes. This scenario requires complementary tools (static analysis, provenance checks). See [THREAT_MODEL.md](THREAT_MODEL.md) for full details.
+
+---
+
+## Security layer requirements
+
+Sentinel is a **verification layer**, not a standalone solution. Its effectiveness depends on these practices:
+
+| Requirement | Why it matters |
+| --- | --- |
+| **Lockfile committed to version control** | Sentinel compares lockfile integrity against registry and tarball. Without a committed lockfile, there is no trusted baseline to verify |
+| **Frozen installs** (`npm ci` / `yarn --frozen-lockfile` / `pnpm --frozen-lockfile`) | `npm install` updates the lockfile on resolution, potentially recording a malicious version as the new baseline |
+| **Review lockfile changes in PRs** | Lockfile injection attacks modify resolution URLs and integrity hashes directly — code review is the only defense ([details](THREAT_MODEL.md#lockfile-injection-via-pull-request)) |
+| **Pin exact dependency versions** | Ranges like `^1.14.0` allow resolution to a newly published malicious version on the next `npm install` |
+
+If these practices are not in place, Sentinel's protection window narrows significantly. See [THREAT_MODEL.md](THREAT_MODEL.md) for the full analysis including [real-world incidents](THREAT_MODEL.md#real-world-incidents-2025-2026).
 
 ---
 
 ## Evidence and trust docs
 
 - [SECURITY.md](SECURITY.md): disclosure policy, guarantees, limitations, and operational security notes
-- [THREAT_MODEL.md](THREAT_MODEL.md): attacker model, trust boundaries, and why hash+lockfile verification differs from list-only approaches
+- [THREAT_MODEL.md](THREAT_MODEL.md): attacker model, trust boundaries, registry trust root caveat, and why three-source verification differs from list-only approaches
 - [ADOPTION_DISTRIBUTION.md](ADOPTION_DISTRIBUTION.md): rollout guidance for CI adoption and distribution roadmap (winget, scoop, choco, Homebrew)
 
 ---

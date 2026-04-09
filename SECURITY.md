@@ -13,34 +13,51 @@ For attacker model and trust-boundary details, see [THREAT_MODEL.md](THREAT_MODE
 
 ## Security Model
 
-Sentinel uses package-registry integrity metadata as source of truth for npm ecosystem lockfiles:
+Sentinel performs three-source integrity verification before allowing any package installation:
 
 ```text
-DOWNLOAD VERIFICATION (happens for every install):
-  1. Download package tarball from npm registry
-  2. Compute SHA-512 hash of downloaded tarball
-  3. Compare against npm's published dist.integrity → PASS or FAIL
+THREE-SOURCE VERIFICATION (every package, every check):
+  1. Read lockfile integrity for pkg@version
+  2. Query registry metadata for pkg@version dist.integrity
+  3. Download tarball and compute SHA-512 in stream
+  4. All three must agree → CLEAN
+  5. Any divergence → COMPROMISED, install blocked
 
-LOCKFILE VERIFICATION (happens before install):
-  1. Read detected lockfile entries (`package-lock.json`, `yarn.lock`, or `pnpm-lock.yaml`)
-  2. Query npm registry for latest published hashes
-  3. Compare lockfile hashes vs registry → MATCH, DIVERGE, or UNVERIFIABLE
+INSTALLATION GATE:
+  1. All packages verified (parallel, bounded concurrency)
+  2. Lockfile hash re-checked for TOCTOU protection
+  3. Package manager install executed (npm ci / yarn --frozen-lockfile / pnpm --frozen-lockfile)
+  4. Any check fails → block installation
 
-INSTALLATION VERIFICATION (Sentinel: before/after):
-  1. All above checks pass → permit manager-specific install
-  2. Any check fails → block installation, prevent TOCTOU window
+RUNTIME NOTE:
+  - node_modules is only touched after full verification completes.
+  - Lockfile synchronization/resolution can still touch project files before verification.
 ```
+
+### What this model catches
+
+- Lockfile tampered locally (lockfile ≠ registry)
+- CDN/MITM serving altered tarball (tarball ≠ registry)
+- Post-publication tarball replacement (tarball ≠ lockfile)
+- Zero-day integrity divergence before any threat feed indexes it
+
+### What this model does NOT catch
+
+**Registry trust root compromise**: if an attacker publishes a malicious version through a compromised maintainer account, the registry serves consistent metadata and tarball. All three sources agree on the malicious content, and Sentinel returns CLEAN. This is the scenario exploited by event-stream, ua-parser-js, and Codecov attacks. See [THREAT_MODEL.md](THREAT_MODEL.md) for details.
 
 ## Threat Model
 
-| Threat | npm | sentinel | Notes |
+| Threat | `npm ci` | sentinel | Notes |
 | --- | --- | --- | --- |
-| Tarball tampering | ❌ | ✅ | Hash mismatch blocks install |
-| Lockfile tampering | ❌ | ✅ | Verified against registry |
-| Man-in-the-middle over HTTPS | ✅ | ✅ | TLS is still required |
-| Time-of-check-time-of-use (TOCTOU) between verify and install | ❌ | ✅ | lockfile hash is re-checked before install |
-| Cached stale result reuse | ⚠️ | ✅ | cache policy limits reuse for unverifiable results |
-| Developer social engineering | ⚠️ | ⚠️ | technical verification does not solve human trust decisions |
+| Tarball ≠ lockfile | ✅ | ✅ | Both verify tarball integrity against lockfile |
+| Lockfile injection (hash + URL manipulated) | ❌ | ✅ | Sentinel cross-checks against registry metadata |
+| CDN/MITM compromise | ✅ | ✅ | Both detect tarball ≠ expected hash |
+| Pre-install isolation (all before any) | ❌ | ✅ | npm ci installs per-package; Sentinel gates the full tree |
+| TOCTOU between verify and install | ❌ | ✅ | Lockfile hash re-checked before install |
+| Cached stale result reuse | ⚠️ | ✅ | CLEAN TTL = 1h, UNVERIFIABLE TTL = 30s |
+| Registry trust root compromise | ❌ | ❌ | Consistent malicious publish passes all hash checks |
+| Malicious but consistent package | ❌ | ❌ | Requires static analysis (Socket, Phylum) |
+| Developer social engineering | ⚠️ | ⚠️ | Technical verification does not solve human trust decisions |
 
 ## Usage Recommendations
 
@@ -75,9 +92,11 @@ Sentinel caches verification results locally at `~/.cache/sentinel/`:
 
 | Status | TTL | Cache? | Behavior |
 | --- | --- | --- | --- |
-| CLEAN | ∞ | ✅ | Reuse indefinitely (immutable hash) |
-| UNVERIFIABLE | 5 min | ✅ | Reuse briefly, re-check after TTL |
+| CLEAN | 1 hour | ✅ | Re-check after TTL to detect post-cache compromise |
+| UNVERIFIABLE | 30 sec | ✅ | Re-check quickly, minimize exploit window |
 | COMPROMISED | — | ❌ | Never cache (always block) |
+
+Cache TTLs are intentionally short to reduce the window where a compromised package could be served from stale cache.
 
 **Clear cache if you suspect corruption:**
 
@@ -155,18 +174,19 @@ Operational note: the project invokes external package-manager commands (`npm`, 
 
 ### What sentinel does NOT protect against
 
-1. **Social engineering** — if a developer bypasses the tooling or trusts a malicious package intentionally
-2. **Malicious but consistently published packages** — if registry metadata and tarball agree, Sentinel verifies integrity, not intent
-3. **Registry/operator trust root** — Sentinel still relies on published registry metadata as part of the chain
-4. **Packages without sufficient metadata** — these become `UNVERIFIABLE`
-5. **Post-installation runtime vulnerabilities** — this is not a vulnerability scanner
+1. **Registry trust root compromise** — if an attacker publishes through a compromised maintainer account, registry metadata and tarball are both malicious but consistent. All three sources agree. This is the most dangerous supply chain scenario (event-stream, ua-parser-js, Codecov) and requires static analysis or provenance checks.
+2. **Malicious but consistently published packages** — a package that is intentionally malicious from first publish will have matching hashes across all sources.
+3. **Social engineering** — if a developer bypasses the tooling or trusts a malicious package intentionally.
+4. **Packages without sufficient metadata** — old packages without integrity fields become `UNVERIFIABLE`.
+5. **Post-installation runtime vulnerabilities** — Sentinel verifies integrity, not safety.
 
-### Complementary tools
+### Complementary tools (recommended)
 
-- `npm audit` — vulnerability scanning in dependencies
-- `snyk` / `Dependabot` — automated vulnerability monitoring
-- `SBOM tools` — software bill of materials
-- Code review — inspect source code before trusting
+- **Socket / Phylum** — static analysis of package behavior (closes the "consistent malicious publish" gap)
+- **npm audit / Snyk / Dependabot** — known CVE detection
+- **SLSA / Sigstore provenance** — build attestation verification
+- **SBOM tools** — software bill of materials
+- **Code review** — inspect source code before trusting
 
 ## FAQ
 
@@ -188,7 +208,7 @@ Operational note: the project invokes external package-manager commands (`npm`, 
 
 ### Q: What's the performance impact?
 
-**A:** ~2-5 seconds per install, dominated by registry queries. Cached results are instant.
+**A:** First run downloads and hashes every tarball (parallel, bounded concurrency). Subsequent runs within cache TTL (1 hour for CLEAN) use cached results and are near-instant. Typical CI time: 10-30 seconds depending on dependency count and network.
 
 ## Version History
 
