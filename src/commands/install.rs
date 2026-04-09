@@ -8,6 +8,7 @@ use super::shared::{
 use crate::constants::{
     INSTALL_ERR_LOCKFILE_GENERATE_FAILED, INSTALL_MAX_CONCURRENCY, INSTALL_MSG_NOTHING_TO_INSTALL,
     INSTALL_PROGRESS_TEMPLATE, INSTALL_PROGRESS_VERIFY_MSG,
+    NPM_ERR_LOCKFILE_ONLY_FAILED_TEMPLATE, render_template,
 };
 use crate::ecosystem::active_lockfile_path;
 use crate::output::{print_install_blocked, print_install_blocked_unverifiable, print_report};
@@ -25,9 +26,9 @@ use crate::types::{
 };
 use crate::ui::command_feedback as ui;
 use crate::utils::{
-    capture_project_files_snapshot, create_progress_bar, generate_lockfile, install_package,
-    lockfile_sha256, resolve_package_into_lockfile, restore_project_files_snapshot,
-    run_clean_install, should_render_progress_bar,
+    capture_project_files_snapshot, create_progress_bar, diagnose_lockfile_failure,
+    generate_lockfile, install_package, lockfile_sha256, resolve_package_into_lockfile,
+    restore_project_files_snapshot, run_clean_install, should_render_progress_bar,
 };
 
 fn parse_package_ref(spec: &str) -> Option<PackageRef> {
@@ -657,15 +658,27 @@ async fn ensure_lockfile_exists(params: EnsureLockfileExistsParams<'_>) -> bool 
         ui::print_missing_lockfile_notice();
     }
 
-    let output = generate_lockfile(current_working_directory);
+    let result = generate_lockfile(current_working_directory);
 
-    match output {
-        Ok(output) if output.status.success() => {
+    match result {
+        Ok(result) if result.output.status.success() => {
             if !quiet {
                 ui::print_lockfile_created_notice();
             }
             
             true
+        }
+        Ok(result) => {
+            let stderr = String::from_utf8_lossy(&result.output.stderr);
+            let manager = result.manager;
+            let hint = diagnose_lockfile_failure(&stderr, manager);
+
+            ui::print_generic_error(&render_template(
+                NPM_ERR_LOCKFILE_ONLY_FAILED_TEMPLATE,
+                &[manager.command().to_string(), hint],
+            ));
+
+            false
         }
         _ => {
             ui::print_generic_error(INSTALL_ERR_LOCKFILE_GENERATE_FAILED);
@@ -676,9 +689,9 @@ async fn ensure_lockfile_exists(params: EnsureLockfileExistsParams<'_>) -> bool 
 }
 
 fn sync_lockfile_with_package_json(current_working_directory: &std::path::Path) -> bool {
-    let output = generate_lockfile(current_working_directory);
+    let result = generate_lockfile(current_working_directory);
 
-    matches!(output, Ok(output) if output.status.success())
+    matches!(result, Ok(result) if result.output.status.success())
 }
 
 pub async fn run_ci(args: &CiArgs) -> ExitCode {

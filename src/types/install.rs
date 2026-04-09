@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 use std::path::Path;
-use std::process::ExitCode;
+use std::process::{ExitCode, Output};
 use std::sync::Arc;
+
+use crate::ecosystem::PackageManager;
 
 use crate::npm::LockfileEntry;
 use crate::verifier::Verifier;
@@ -34,6 +36,18 @@ pub struct SaveCiReportParams<'a> {
     pub report_path: &'a Path,
     pub quiet: bool,
     pub is_text_output: bool,
+}
+
+pub struct LockfileGenerationResult {
+    pub output: Output,
+    pub manager: PackageManager,
+}
+
+pub enum LockfileFailureKind {
+    DependencyConflict,
+    CommandNotFound,
+    NetworkError,
+    Unknown,
 }
 
 pub struct EnsureLockfileExistsParams<'a> {

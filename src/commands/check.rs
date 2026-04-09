@@ -14,7 +14,9 @@ use crate::types::{
     VerifyPackagesExecutionParams, VerifyPackagesParams,
 };
 use crate::ui::command_feedback as ui;
-use crate::utils::{create_progress_bar, generate_lockfile, should_render_progress_bar};
+use crate::utils::{
+    create_progress_bar, diagnose_lockfile_failure, generate_lockfile, should_render_progress_bar,
+};
 use std::process::ExitCode;
 
 async fn ensure_lockfile_exists(
@@ -35,27 +37,29 @@ async fn ensure_lockfile_exists(
         ui::print_missing_lockfile_notice();
     }
 
-    let output = generate_lockfile(current_working_directory);
+    let result = generate_lockfile(current_working_directory);
 
-    match output {
-        Ok(output) if output.status.success() => {
+    match result {
+        Ok(result) if result.output.status.success() => {
             if !quiet {
                 ui::print_lockfile_created_notice();
             }
 
             Ok(true)
         }
-        Ok(output) => {
-            let stderr = String::from_utf8_lossy(&output.stderr);
+        Ok(result) => {
+            let stderr = String::from_utf8_lossy(&result.output.stderr);
+            let manager = result.manager;
+            let hint = diagnose_lockfile_failure(&stderr, manager);
 
             Err(SentinelError::LockfileParse(render_template(
                 NPM_ERR_LOCKFILE_ONLY_FAILED_TEMPLATE,
-                &[stderr.to_string()],
+                &[manager.command().to_string(), hint],
             )))
         }
         Err(e) => Err(SentinelError::LockfileParse(render_template(
             NPM_ERR_EXEC_FAILED_TEMPLATE,
-            &[e.to_string()],
+            &["npm".to_string(), e.to_string()],
         ))),
     }
 }
