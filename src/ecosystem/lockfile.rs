@@ -7,17 +7,13 @@ use crate::constants::{
     YARN_LOCK_KEY_VERSION, YARN_LOCK_SELECTOR_SEPARATOR,
 };
 use crate::npm::{build_dependency_tree, read_npm_lockfile};
-use crate::types::{DependencyNode, DependencyTree, FlushYarnEntryParams, LockfileEntry, PackageRef, SentinelError};
+use crate::types::{
+    DependencyNode, DependencyTree, FlushYarnEntryParams, LockfileEntry, LockfileParser,
+    NpmLockfileParser, PackageRef, PnpmLockfileParser, SentinelError, YarnLineKind,
+    YarnLockfileParser,
+};
 
 use super::{PackageManager, detect_package_manager};
-
-pub trait LockfileParser {
-    fn parse_entries(&self, project_dir: &Path) -> Result<HashMap<String, LockfileEntry>, SentinelError>;
-}
-
-pub struct NpmLockfileParser;
-pub struct YarnLockfileParser;
-pub struct PnpmLockfileParser;
 
 impl LockfileParser for NpmLockfileParser {
     fn parse_entries(&self, project_dir: &Path) -> Result<HashMap<String, LockfileEntry>, SentinelError> {
@@ -103,33 +99,24 @@ fn parse_yarn_lock_entries(content: &str) -> Result<HashMap<String, LockfileEntr
     let mut current_integrity: Option<String> = None;
 
     for raw_line in content.lines() {
-        let line = raw_line.trim_end();
+        match classify_yarn_line(raw_line) {
+            YarnLineKind::Header(line) => {
+                flush_yarn_entry(FlushYarnEntryParams {
+                    entries: &mut entries,
+                    selector: &mut current_selector,
+                    version: &mut current_version,
+                    integrity: &mut current_integrity,
+                });
 
-        let is_header = !line.is_empty() && !line.starts_with(' ') && line.ends_with(':');
-
-        if is_header {
-            flush_yarn_entry(FlushYarnEntryParams {
-                entries: &mut entries,
-                selector: &mut current_selector,
-                version: &mut current_version,
-                integrity: &mut current_integrity,
-            });
-
-            current_selector = parse_yarn_selector_header(line);
-
-            continue;
-        }
-
-        let trimmed = line.trim_start();
-
-        if let Some(value) = trimmed.strip_prefix(YARN_LOCK_KEY_VERSION) {
-            current_version = Some(strip_wrapping_quotes(value));
-
-            continue;
-        }
-
-        if let Some(value) = trimmed.strip_prefix(YARN_LOCK_KEY_INTEGRITY) {
-            current_integrity = Some(strip_wrapping_quotes(value));
+                current_selector = parse_yarn_selector_header(line);
+            }
+            YarnLineKind::Version(value) => {
+                current_version = Some(strip_wrapping_quotes(value));
+            }
+            YarnLineKind::Integrity(value) => {
+                current_integrity = Some(strip_wrapping_quotes(value));
+            }
+            YarnLineKind::Ignore => {}
         }
     }
 
@@ -141,6 +128,22 @@ fn parse_yarn_lock_entries(content: &str) -> Result<HashMap<String, LockfileEntr
     });
 
     Ok(entries)
+}
+
+fn classify_yarn_line(raw_line: &str) -> YarnLineKind<'_> {
+    let line = raw_line.trim_end();
+    let trimmed = line.trim_start();
+
+    let is_header = !line.is_empty() && !line.starts_with(' ') && line.ends_with(':');
+    let version_value = trimmed.strip_prefix(YARN_LOCK_KEY_VERSION);
+    let integrity_value = trimmed.strip_prefix(YARN_LOCK_KEY_INTEGRITY);
+
+    match (is_header, version_value, integrity_value) {
+        (true, _, _) => YarnLineKind::Header(line),
+        (false, Some(value), _) => YarnLineKind::Version(value),
+        (false, None, Some(value)) => YarnLineKind::Integrity(value),
+        (false, None, None) => YarnLineKind::Ignore,
+    }
 }
 
 fn flush_yarn_entry(params: FlushYarnEntryParams<'_>) {
@@ -189,10 +192,7 @@ fn parse_pnpm_lock_entries(content: &str) -> Result<HashMap<String, LockfileEntr
     let mut entries = HashMap::new();
 
     for (raw_key, raw_meta) in packages {
-        let key = match raw_key.as_str() {
-            Some(value) => value,
-            None => continue,
-        };
+        let Some(key) = raw_key.as_str() else { continue };
 
         let normalized = key
             .trim_start_matches('/')
@@ -200,10 +200,7 @@ fn parse_pnpm_lock_entries(content: &str) -> Result<HashMap<String, LockfileEntr
             .next()
             .unwrap_or("");
 
-        let (name, version) = match parse_name_and_version(normalized) {
-            Some(value) => value,
-            None => continue,
-        };
+        let Some((name, version)) = parse_name_and_version(normalized) else { continue };
 
         let integrity = raw_meta
             .get(PNPM_LOCK_KEY_RESOLUTION)
@@ -232,6 +229,7 @@ fn parse_pnpm_lock_entries(content: &str) -> Result<HashMap<String, LockfileEntr
 
 fn parse_name_and_version(spec: &str) -> Option<(String, String)> {
     let at_index = spec.rfind('@')?;
+    
     if at_index == 0 {
         return None;
     }
