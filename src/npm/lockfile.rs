@@ -18,6 +18,7 @@ pub(crate) fn process_lockfile_package(
     } = params;
 
     let path_is_empty = package_path.is_empty();
+    
     if path_is_empty {
         return None;
     }
@@ -35,6 +36,7 @@ pub(crate) fn process_lockfile_package(
         .to_string();
 
     let version_is_empty = package_version.is_empty();
+    
     if version_is_empty {
         return None;
     }
@@ -73,6 +75,7 @@ fn extract_v1_deps(params: ExtractV1DepsParams<'_>) {
             .to_string();
 
         let version_is_empty = package_version.is_empty();
+        
         if version_is_empty {
             continue;
         }
@@ -88,6 +91,7 @@ fn extract_v1_deps(params: ExtractV1DepsParams<'_>) {
             .unwrap_or(false);
 
         let package_ref = PackageRef::new(package_name, &package_version);
+        
         entries.insert(
             package_ref.to_string(),
             LockfileEntry {
@@ -114,6 +118,7 @@ pub fn read_npm_lockfile(
 ) -> Result<HashMap<String, LockfileEntry>, SentinelError> {
     let lock_path = project_dir.join(PACKAGE_LOCK_FILE);
     let lockfile_exists = lock_path.exists();
+    
     if !lockfile_exists {
         return Err(SentinelError::LockfileNotFound);
     }
@@ -134,13 +139,13 @@ pub fn read_npm_lockfile(
 
     match (v2_packages, v1_dependencies) {
         (Some(packages), _) => {
-            for (path, metadata) in packages {
-                if let Some((key, entry)) = process_lockfile_package(ProcessLockfilePackageParams {
+            for (key, entry) in packages.iter().filter_map(|(path, metadata)| {
+                process_lockfile_package(ProcessLockfilePackageParams {
                     package_path: path,
                     package_metadata: metadata,
-                }) {
-                    entries.insert(key, entry);
-                }
+                })
+            }) {
+                entries.insert(key, entry);
             }
         }
         (None, Some(dependencies)) => {

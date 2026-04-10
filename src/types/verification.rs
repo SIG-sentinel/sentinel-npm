@@ -3,6 +3,12 @@ use serde::{Deserialize, Serialize};
 use super::package::PackageRef;
 use super::report::Report;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ComparisonVerdict {
+    Clean,
+    Compromised,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VerifyResult {
     pub package: PackageRef,

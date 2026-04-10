@@ -7,7 +7,7 @@ use crate::constants::{
 };
 use crate::types::PrintReportSubmissionParams;
 
-fn report_submission_lines(params: PrintReportSubmissionParams<'_>) -> Vec<String> {
+pub fn report_submission_lines(params: PrintReportSubmissionParams<'_>) -> Vec<String> {
     let PrintReportSubmissionParams {
         package_name,
         reason,
@@ -45,25 +45,5 @@ fn report_submission_lines(params: PrintReportSubmissionParams<'_>) -> Vec<Strin
 pub fn print_report_submission(params: PrintReportSubmissionParams<'_>) {
     for line in report_submission_lines(params) {
         println!("{line}");
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::report_submission_lines;
-    use crate::types::PrintReportSubmissionParams;
-
-    #[test]
-    fn test_report_submission_lines_include_reason_and_evidence() {
-        let lines = report_submission_lines(PrintReportSubmissionParams {
-            package_name: "left-pad@1.3.0",
-            reason: "suspicious lifecycle script",
-            evidence: Some("https://example.test/evidence"),
-        });
-
-        let rendered = lines.join("\n");
-
-        assert!(rendered.contains("suspicious lifecycle script"));
-        assert!(rendered.contains("https://example.test/evidence"));
     }
 }

@@ -16,6 +16,7 @@ pub fn read_package_json_deps(
 
     let path = project_dir.join(PACKAGE_JSON_FILE);
     let path_exists = path.exists();
+    
     if !path_exists {
         return Err(SentinelError::PackageJsonNotFound {
             path: project_dir.display().to_string(),

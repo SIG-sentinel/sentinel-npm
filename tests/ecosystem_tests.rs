@@ -1,11 +1,12 @@
 use std::fs;
 
 use sentinel::ecosystem::{
-    ComparisonVerdict, InstallExecutor, LockfileParser, NpmLockfileParser, PackageManager,
+    InstallExecutor, LockfileParser, NpmLockfileParser, PackageManager,
     PackageManagerExecutor, PnpmLockfileParser, YarnLockfileParser, compare_integrity,
     detect_package_manager, read_lockfile_entries, active_lockfile_path,
 };
 use sentinel::types::CleanInstallPlanParams;
+use sentinel::types::ComparisonVerdict;
 use sentinel::types::SentinelError;
 use tempfile::tempdir;
 

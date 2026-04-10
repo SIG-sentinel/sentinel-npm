@@ -46,6 +46,12 @@ pub struct FlushYarnEntryParams<'a> {
     pub integrity: &'a mut Option<String>,
 }
 
+pub struct WireDependenciesParams<'a> {
+    pub packages: &'a serde_json::Map<String, serde_json::Value>,
+    pub package_key_by_path: &'a HashMap<String, String>,
+    pub all_packages: &'a mut HashMap<String, DependencyNode>,
+}
+
 pub struct ResolveDependencyKeyParams<'a> {
     pub package_path: &'a str,
     pub dep_name: &'a str,
