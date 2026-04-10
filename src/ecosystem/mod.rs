@@ -4,6 +4,9 @@ mod lockfile;
 mod manager;
 mod registry;
 
+pub use crate::types::{CommandPlan, InstallExecutor};
+pub use crate::types::{LockfileParser, NpmLockfileParser, PnpmLockfileParser, YarnLockfileParser};
+pub use crate::types::PackageManager;
 pub use comparator::*;
 pub use executor::*;
 pub use lockfile::*;

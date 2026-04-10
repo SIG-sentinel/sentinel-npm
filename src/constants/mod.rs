@@ -1,6 +1,7 @@
 pub mod cache;
 pub mod cli;
 pub mod crypto;
+pub mod lockfile_check;
 pub mod messages;
 pub mod npm;
 pub mod paths;
@@ -10,6 +11,7 @@ pub mod template;
 pub use cache::*;
 pub use cli::*;
 pub use crypto::*;
+pub use lockfile_check::*;
 pub use messages::*;
 pub use npm::*;
 pub use paths::*;
