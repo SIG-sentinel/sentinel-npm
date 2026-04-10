@@ -49,54 +49,49 @@ impl LocalCache {
         let cache_key = package_ref.to_string();
         let current_time = Self::now();
 
-        let row: Option<(String, i64, Option<i64>)> = connection
+        let (result_json, cached_at, ttl_secs): (String, i64, Option<i64>) = connection
             .query_row(SQL_SELECT_CACHE_BY_KEY, params![cache_key], |row| {
                 Ok((row.get(0)?, row.get(1)?, row.get(2)?))
             })
-            .ok();
+            .ok()?;
 
-        match row {
-            None => None,
-            Some((result_json, cached_at, ttl_secs)) => {
-                let is_expired = ttl_secs
-                    .map(|ttl_secs_value| current_time - cached_at > ttl_secs_value)
-                    .unwrap_or(false);
+        let is_expired = ttl_secs
+            .map(|ttl| current_time - cached_at > ttl)
+            .unwrap_or(false);
 
-                match is_expired {
-                    true => {
-                        connection
-                            .execute(SQL_DELETE_CACHE_BY_KEY, params![cache_key])
-                            .ok();
-                        None
-                    }
-                    false => serde_json::from_str(&result_json).ok(),
-                }
-            }
+        if is_expired {
+            connection
+                .execute(SQL_DELETE_CACHE_BY_KEY, params![cache_key])
+                .ok();
+            
+            return None;
         }
+
+        serde_json::from_str(&result_json).ok()
     }
 
     pub fn put(&self, result: &VerifyResult) {
-        if !matches!(result.verdict, Verdict::Compromised { .. }) {
-            let ttl_secs = match &result.verdict {
-                Verdict::Clean => Some(CLEAN_CACHE_TTL_SECS),
-                Verdict::Unverifiable { .. } => Some(UNVERIFIABLE_CACHE_TTL_SECS),
-                Verdict::Compromised { .. } => None,
-            };
+        let ttl_secs = match &result.verdict {
+            Verdict::Clean => Some(CLEAN_CACHE_TTL_SECS),
+            Verdict::Unverifiable { .. } => Some(UNVERIFIABLE_CACHE_TTL_SECS),
+            Verdict::Compromised { .. } => return,
+        };
 
-            let connection = self.conn().ok();
-            let result_json = serde_json::to_string(result).ok();
+        let Some(connection) = self.conn().ok() else {
+            return;
+        };
+        let Some(result_json) = serde_json::to_string(result).ok() else {
+            return;
+        };
 
-            if let (Some(connection), Some(result_json)) = (connection, result_json) {
-                let cache_key = result.package.to_string();
+        let cache_key = result.package.to_string();
 
-                connection
-                    .execute(
-                        SQL_UPSERT_CACHE,
-                        params![cache_key, result_json, Self::now(), ttl_secs],
-                    )
-                    .ok();
-            }
-        }
+        connection
+            .execute(
+                SQL_UPSERT_CACHE,
+                params![cache_key, result_json, Self::now(), ttl_secs],
+            )
+            .ok();
     }
 
     pub fn invalidate(&self, package_ref: &PackageRef) {
