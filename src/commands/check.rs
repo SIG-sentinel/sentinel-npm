@@ -177,14 +177,11 @@ pub async fn run(args: &CheckArgs) -> ExitCode {
     let is_text_output = matches!(args.format, OutputFormat::Text);
     let should_render_bar = should_render_progress_bar(&args.format, args.quiet);
 
-    let progress_bar = match should_render_bar {
-        true => Some(create_progress_bar(ProgressBarConfig {
-            length: packages_to_verify.len(),
-            message: CHECK_PROGRESS_VERIFY_MSG,
-            template: CHECK_PROGRESS_TEMPLATE,
-        })),
-        false => None,
-    };
+    let progress_bar = should_render_bar.then(|| create_progress_bar(ProgressBarConfig {
+        length: packages_to_verify.len(),
+        message: CHECK_PROGRESS_VERIFY_MSG,
+        template: CHECK_PROGRESS_TEMPLATE,
+    }));
 
     let results = verify_packages(VerifyPackagesExecutionParams {
         verify_packages_params: VerifyPackagesParams {
