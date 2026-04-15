@@ -212,6 +212,15 @@ Operational note: the project invokes external package-manager commands (`npm`, 
 
 ## Version History
 
+- **v1.2.3** (2026-04-15)
+  - Fix: legacy CLEAN cache entries missing `computed_sha512` evidence are now invalidated and revalidated via tarball download
+  - `computed_sha512` is no longer `null` in JSON output for CLEAN results after cache warm-up from older versions
+  - Two unit tests added for `cache_requires_tarball_revalidation` helper
+
+- **v1.2.2** (2026-04-10)
+  - Internal refactor: typed parameter structs, let-else pattern, extracted types and constants across verifier and ecosystem modules
+  - Repository hardening: branch protection, signed commits, CODEOWNERS enforced on `main`
+
 - **v1.2.1** (2026-04-09)
   - Actionable diagnostic hints for lockfile generation failures (ERESOLVE, missing PM, network)
   - Error messages now include detected package manager name and recovery commands
