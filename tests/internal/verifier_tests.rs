@@ -1,4 +1,4 @@
-use super::cache_matches_lockfile;
+use super::{cache_matches_lockfile, cache_requires_tarball_revalidation};
 use crate::types::{CacheMatchParams, Evidence, LockfileEntry, PackageRef, Verdict, VerifyResult};
 use crate::types::{UnverifiableReason, VerifierNewParams};
 use crate::verifier::Verifier;
@@ -49,6 +49,40 @@ fn test_cache_matches_lockfile_when_integrity_drifted() {
         entry: &lockfile_entry,
         cached_result: &cached_result,
     }));
+}
+
+#[test]
+fn test_cache_requires_tarball_revalidation_for_clean_without_computed_sha512() {
+    let cached_result = VerifyResult {
+        package: PackageRef::new("pkg", "1.0.0"),
+        verdict: Verdict::Clean,
+        detail: String::new(),
+        evidence: Evidence {
+            lockfile_integrity: Some("sha512-aaa".to_string()),
+            registry_integrity: Some("sha512-aaa".to_string()),
+            computed_sha512: None,
+            source_url: Some("https://registry.npmjs.org/pkg/-/pkg-1.0.0.tgz".to_string()),
+        },
+    };
+
+    assert!(cache_requires_tarball_revalidation(&cached_result));
+}
+
+#[test]
+fn test_cache_does_not_require_tarball_revalidation_for_clean_with_computed_sha512() {
+    let cached_result = VerifyResult {
+        package: PackageRef::new("pkg", "1.0.0"),
+        verdict: Verdict::Clean,
+        detail: String::new(),
+        evidence: Evidence {
+            lockfile_integrity: Some("sha512-aaa".to_string()),
+            registry_integrity: Some("sha512-aaa".to_string()),
+            computed_sha512: Some("sha512-aaa".to_string()),
+            source_url: Some("https://registry.npmjs.org/pkg/-/pkg-1.0.0.tgz".to_string()),
+        },
+    };
+
+    assert!(!cache_requires_tarball_revalidation(&cached_result));
 }
 
 #[tokio::test]
