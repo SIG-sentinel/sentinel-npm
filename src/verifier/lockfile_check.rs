@@ -19,7 +19,10 @@ use crate::types::{
     UnverifiableReason, VerifyIntegrityParams, VerifyResult, VerifyTarballIntegrityParams, Verdict,
 };
 
-use super::{Verifier, cache_matches_lockfile, computed_sha512_integrity, create_unverifiable};
+use super::{
+    Verifier, cache_matches_lockfile, cache_requires_tarball_revalidation,
+    computed_sha512_integrity, create_unverifiable,
+};
 
 impl Verifier {
     pub async fn check_from_lockfile(&self, entry: &LockfileEntry) -> VerifyResult {
@@ -42,8 +45,21 @@ async fn check_from_lockfile_impl(params: CheckFromLockfileParams<'_, Verifier>)
         });
 
         if cache_valid {
-            tracing::debug!("{package_ref}: {LOG_CACHE_HIT}");
-            return cached_result;
+            let needs_revalidation = cache_requires_tarball_revalidation(&cached_result);
+
+            match needs_revalidation {
+                true => {
+                    tracing::debug!(
+                        "{package_ref}: {LOG_CACHE_STALE} (missing computed_sha512 evidence)"
+                    );
+                    verifier.cache.invalidate(package_ref);
+                }
+                false => {
+                    tracing::debug!("{package_ref}: {LOG_CACHE_HIT}");
+
+                    return cached_result;
+                }
+            }
         }
 
         tracing::debug!("{package_ref}: {LOG_CACHE_STALE}");
@@ -58,18 +74,21 @@ async fn check_from_lockfile_impl(params: CheckFromLockfileParams<'_, Verifier>)
             template_args: &[package_ref.to_string()],
             evidence: Evidence::empty(),
         });
+        
         return verifier.cache_and_return(unverifiable);
     };
 
     let registry_metadata = match verifier.registry.fetch_version(package_ref).await {
         Ok(metadata) => metadata,
         Err(error) => {
-            return handle_registry_fetch_error_impl(HandleRegistryFetchErrorParams {
+            let registry_fetch_error = handle_registry_fetch_error_impl(HandleRegistryFetchErrorParams {
                 verifier,
                 package_ref,
                 error,
                 lockfile_integrity: &lockfile_integrity,
-            })
+            });
+
+            return registry_fetch_error;
         }
     };
 
@@ -88,6 +107,7 @@ async fn check_from_lockfile_impl(params: CheckFromLockfileParams<'_, Verifier>)
                 ..Evidence::empty()
             },
         });
+
         return verifier.cache_and_return(unverifiable);
     };
 

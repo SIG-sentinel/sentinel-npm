@@ -42,6 +42,13 @@ pub(super) fn cache_matches_lockfile(params: CacheMatchParams<'_>) -> bool {
     }
 }
 
+pub(super) fn cache_requires_tarball_revalidation(cached_result: &VerifyResult) -> bool {
+    let is_clean = matches!(cached_result.verdict, Verdict::Clean);
+    let missing_computed_sha512 = cached_result.evidence.computed_sha512.is_none();
+
+    is_clean && missing_computed_sha512
+}
+
 pub(super) fn no_tarball_result(result: VerifyResult) -> VerifyResultWithTarball {
     VerifyResultWithTarball {
         result,
