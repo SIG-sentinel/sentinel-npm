@@ -1,8 +1,7 @@
-#!/bin/sh
 
 set -eu
 
-VERSION="latest"
+VERSION=""
 REPO="SIG-sentinel/sentinel-npm"
 INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
 BASE_URL="${SENTINEL_RELEASE_BASE_URL:-}"
@@ -54,6 +53,11 @@ case "$REPO" in
     ;;
 esac
 
+if [ -z "$BASE_URL" ] && [ -z "$VERSION" ]; then
+  echo "--version is required (example: --version 1.1.1)" >&2
+  exit 1
+fi
+
 platform=$(uname -s)
 arch=$(uname -m)
 
@@ -77,15 +81,11 @@ case "$platform:$arch" in
 esac
 
 if [ -z "$BASE_URL" ]; then
-  if [ "$VERSION" = "latest" ]; then
-    base_url="https://github.com/$REPO/releases/latest/download"
-  else
-    case "$VERSION" in
-      v*) ;;
-      *) VERSION="v$VERSION" ;;
-    esac
-    base_url="https://github.com/$REPO/releases/download/$VERSION"
-  fi
+  case "$VERSION" in
+    v*) ;;
+    *) VERSION="v$VERSION" ;;
+  esac
+  base_url="https://github.com/$REPO/releases/download/$VERSION"
 else
   base_url="$BASE_URL"
 fi
@@ -116,6 +116,29 @@ fi
 
 if [ "$expected_checksum" != "$actual_checksum" ]; then
   echo "checksum mismatch for $asset_name" >&2
+  exit 1
+fi
+
+SENTINEL_PUBLIC_KEY='-----BEGIN PUBLIC KEY-----
+MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE2golH9pruEs3kBIQzfv2QbO0pnYc
+M+HG/ijCK2FXoIOe6Xp3/WqWzighRowDBKxy0Y7duM03hVsRTcRcFvgHIA==
+-----END PUBLIC KEY-----'
+
+sig_path="$tmp_dir/checksums.txt.sig"
+if ! command -v openssl >/dev/null 2>&1; then
+  echo "openssl not found (required for signature verification)" >&2
+  exit 1
+fi
+
+if ! curl -fsSL "$base_url/checksums.txt.sig" -o "$sig_path"; then
+  echo "signature file not found: checksums.txt.sig" >&2
+  exit 1
+fi
+
+pub_path="$tmp_dir/sentinel_pub.pem"
+printf '%s\n' "$SENTINEL_PUBLIC_KEY" > "$pub_path"
+if ! openssl dgst -sha256 -verify "$pub_path" -signature "$sig_path" "$checksums_path" >/dev/null 2>&1; then
+  echo "signature verification failed for checksums.txt" >&2
   exit 1
 fi
 
