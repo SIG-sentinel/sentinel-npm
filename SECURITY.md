@@ -47,17 +47,17 @@ RUNTIME NOTE:
 
 ## Threat Model
 
-| Threat | `npm ci` | sentinel | Notes |
-| --- | --- | --- | --- |
-| Tarball ≠ lockfile | ✅ | ✅ | Both verify tarball integrity against lockfile |
-| Lockfile injection (hash + URL manipulated) | ❌ | ✅ | Sentinel cross-checks against registry metadata |
-| CDN/MITM compromise | ✅ | ✅ | Both detect tarball ≠ expected hash |
-| Pre-install isolation (all before any) | ❌ | ✅ | npm ci installs per-package; Sentinel gates the full tree |
-| TOCTOU between verify and install | ❌ | ✅ | Lockfile hash re-checked before install |
-| Cached stale result reuse | ⚠️ | ✅ | CLEAN TTL = 1h, UNVERIFIABLE TTL = 30s |
-| Registry trust root compromise | ❌ | ❌ | Consistent malicious publish passes all hash checks |
-| Malicious but consistent package | ❌ | ❌ | Requires static analysis (Socket, Phylum) |
-| Developer social engineering | ⚠️ | ⚠️ | Technical verification does not solve human trust decisions |
+| Threat                                      | `npm ci` | sentinel | Notes                                                       |
+| ------------------------------------------- | -------- | -------- | ----------------------------------------------------------- |
+| Tarball ≠ lockfile                          | ✅       | ✅       | Both verify tarball integrity against lockfile              |
+| Lockfile injection (hash + URL manipulated) | ❌       | ✅       | Sentinel cross-checks against registry metadata             |
+| CDN/MITM compromise                         | ✅       | ✅       | Both detect tarball ≠ expected hash                         |
+| Pre-install isolation (all before any)      | ❌       | ✅       | npm ci installs per-package; Sentinel gates the full tree   |
+| TOCTOU between verify and install           | ❌       | ✅       | Lockfile hash re-checked before install                     |
+| Cached stale result reuse                   | ⚠️       | ✅       | CLEAN TTL = 1h, UNVERIFIABLE TTL = 30s                      |
+| Registry trust root compromise              | ❌       | ❌       | Consistent malicious publish passes all hash checks         |
+| Malicious but consistent package            | ❌       | ❌       | Requires static analysis (Socket, Phylum)                   |
+| Developer social engineering                | ⚠️       | ⚠️       | Technical verification does not solve human trust decisions |
 
 ## Usage Recommendations
 
@@ -65,6 +65,9 @@ RUNTIME NOTE:
 
 ```bash
 # Always verify before adding dependency
+sentinel install express@4.21.2
+
+# Enable lifecycle scripts only when required by your project
 sentinel install express@4.21.2 --allow-scripts
 
 # Or check current state
@@ -90,11 +93,11 @@ sentinel check
 
 Sentinel caches verification results locally at `~/.cache/sentinel/`:
 
-| Status | TTL | Cache? | Behavior |
-| --- | --- | --- | --- |
-| CLEAN | 1 hour | ✅ | Re-check after TTL to detect post-cache compromise |
-| UNVERIFIABLE | 30 sec | ✅ | Re-check quickly, minimize exploit window |
-| COMPROMISED | — | ❌ | Never cache (always block) |
+| Status       | TTL    | Cache? | Behavior                                           |
+| ------------ | ------ | ------ | -------------------------------------------------- |
+| CLEAN        | 1 hour | ✅     | Re-check after TTL to detect post-cache compromise |
+| UNVERIFIABLE | 30 sec | ✅     | Re-check quickly, minimize exploit window          |
+| COMPROMISED  | —      | ❌     | Never cache (always block)                         |
 
 Cache TTLs are intentionally short to reduce the window where a compromised package could be served from stale cache.
 
@@ -111,9 +114,16 @@ rm -rf ~/.cache/sentinel/
 All releases are published to GitHub with SHA-256 checksums:
 
 ```bash
-# Verify binary before running
-curl -fsSL https://github.com/SIG-sentinel/sentinel-npm/releases/latest/download/checksums.txt > /tmp/checksums.txt
-sha256sum -c /tmp/checksums.txt sentinel-linux-x64
+# Verify binary before running (pin exact version)
+VERSION="2.0.0"
+BASE="https://github.com/SIG-sentinel/sentinel-npm/releases/download/v${VERSION}"
+
+curl -fsSL "${BASE}/sentinel-linux-x64" -o /tmp/sentinel-linux-x64
+curl -fsSL "${BASE}/checksums.txt" -o /tmp/checksums.txt
+curl -fsSL "${BASE}/checksums.txt.sig" -o /tmp/checksums.txt.sig
+
+grep 'sentinel-linux-x64' /tmp/checksums.txt | sha256sum -c -
+openssl dgst -sha256 -verify ./public.pem -signature /tmp/checksums.txt.sig /tmp/checksums.txt
 ```
 
 ### npm Package (`sentinel-check`)
@@ -138,11 +148,10 @@ If you discover a vulnerability:
 1. **Do NOT open a public GitHub issue**
 2. Open a **private GitHub Security Advisory** in this repository (`Security` tab)
 3. Include:
-
-    - Description of vulnerability
-    - Steps to reproduce
-    - Suggested fix (if any)
-    - Preferred response channel in the advisory thread
+   - Description of vulnerability
+   - Steps to reproduce
+   - Suggested fix (if any)
+   - Preferred response channel in the advisory thread
 
 We will:
 
@@ -211,6 +220,11 @@ Operational note: the project invokes external package-manager commands (`npm`, 
 **A:** First run downloads and hashes every tarball (parallel, bounded concurrency). Subsequent runs within cache TTL (1 hour for CLEAN) use cached results and are near-instant. Typical CI time: 10-30 seconds depending on dependency count and network.
 
 ## Version History
+
+- **v2.0.0** (2026-04-23)
+  - Bootstrap hardening: installer now requires explicit `--version` and mandatory signature verification (`checksums.txt.sig`)
+  - Lifecycle scripts now blocked by default in `sentinel ci` and `sentinel install`; explicit opt-in via `--allow-scripts`
+  - Improved setup diagnostics for lockfile detection and package-manager disambiguation
 
 - **v1.2.3** (2026-04-15)
   - Fix: legacy CLEAN cache entries missing `computed_sha512` evidence are now invalidated and revalidated via tarball download
