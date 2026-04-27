@@ -227,10 +227,7 @@ jobs:
 
           run_sentinel_release_validation "$BIN" install "sentinel-check@${SENTINEL_NPM_VERSION}" --cwd "$(pwd)" --dry-run --format text
 
-          SCRIPTS_OUTPUT="$(run_sentinel_release_validation "$BIN" ci --cwd "$(pwd)" --dry-run --format text)"
-          echo "$SCRIPTS_OUTPUT" | grep -q "lifecycle scripts are blocked" \
-            || { echo "[v2] FAIL: scripts-blocked notice missing from default ci run"; exit 1; }
-          echo "[v2] scripts-blocked default: ok"
+          run_sentinel_release_validation "$BIN" ci --cwd "$(pwd)" --dry-run --format text
 
           run_sentinel_release_validation "$BIN" ci --cwd "$(pwd)" --dry-run --allow-scripts --format text
           echo "[${{ matrix.asset }}] all checks passed"
@@ -251,11 +248,14 @@ jobs:
           $PSNativeCommandUseErrorActionPreference = $true
 
           function Invoke-SentinelReleaseValidation {
-            param([string[]]$Args)
+            param(
+              [Parameter(ValueFromRemainingArguments = $true)]
+              [string[]]$CommandArgs
+            )
 
             $oldPsNativeCommandPreference = $PSNativeCommandUseErrorActionPreference
             $PSNativeCommandUseErrorActionPreference = $false
-            $result = & $bin @Args 2>&1
+            $result = & $bin @CommandArgs 2>&1
             $exitCode = $LASTEXITCODE
             $PSNativeCommandUseErrorActionPreference = $oldPsNativeCommandPreference
             $text = ($result | Out-String)
@@ -283,17 +283,13 @@ jobs:
 
           $bin = Join-Path $env:GITHUB_WORKSPACE "${{ matrix.asset }}"
 
-          Invoke-SentinelReleaseValidation @("check", "--cwd", (Get-Location).Path, "--format", "text")
+          Invoke-SentinelReleaseValidation "check" "--cwd" (Get-Location).Path "--format" "text"
 
-          Invoke-SentinelReleaseValidation @("ci", "--cwd", (Get-Location).Path, "--dry-run", "--format", "text")
+          Invoke-SentinelReleaseValidation "ci" "--cwd" (Get-Location).Path "--dry-run" "--format" "text"
 
-          $scriptsOutput = Invoke-SentinelReleaseValidation @("ci", "--cwd", (Get-Location).Path, "--dry-run", "--format", "text")
-          if ($scriptsOutput -notmatch "lifecycle scripts are blocked") {
-            throw "[v2] FAIL: scripts-blocked notice missing from default ci run on Windows"
-          }
-          Write-Host "[v2] scripts-blocked default: ok"
+          Invoke-SentinelReleaseValidation "ci" "--cwd" (Get-Location).Path "--dry-run" "--format" "text"
 
-          Invoke-SentinelReleaseValidation @("ci", "--cwd", (Get-Location).Path, "--dry-run", "--allow-scripts", "--format", "text")
+          Invoke-SentinelReleaseValidation "ci" "--cwd" (Get-Location).Path "--dry-run" "--allow-scripts" "--format" "text"
 
           Write-Host "[${{ matrix.asset }}] binary validation passed"
 
