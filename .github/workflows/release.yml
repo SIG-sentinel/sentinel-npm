@@ -227,7 +227,7 @@ jobs:
 
           run_sentinel_release_validation "$BIN" install "sentinel-check@${SENTINEL_NPM_VERSION}" --cwd "$(pwd)" --dry-run --format text
 
-          SCRIPTS_OUTPUT=$("$BIN" ci --cwd "$(pwd)" --dry-run --format text 2>&1)
+          SCRIPTS_OUTPUT="$(run_sentinel_release_validation "$BIN" ci --cwd "$(pwd)" --dry-run --format text)"
           echo "$SCRIPTS_OUTPUT" | grep -q "lifecycle scripts are blocked" \
             || { echo "[v2] FAIL: scripts-blocked notice missing from default ci run"; exit 1; }
           echo "[v2] scripts-blocked default: ok"
@@ -287,7 +287,7 @@ jobs:
 
           Invoke-SentinelReleaseValidation @("ci", "--cwd", (Get-Location).Path, "--dry-run", "--format", "text")
 
-          $scriptsOutput = & $bin ci --cwd (Get-Location).Path --dry-run --format text 2>&1
+          $scriptsOutput = Invoke-SentinelReleaseValidation @("ci", "--cwd", (Get-Location).Path, "--dry-run", "--format", "text")
           if ($scriptsOutput -notmatch "lifecycle scripts are blocked") {
             throw "[v2] FAIL: scripts-blocked notice missing from default ci run on Windows"
           }
