@@ -1,6 +1,6 @@
 [package]
 name    = "sentinel"
-version = "1.2.3"
+version = "2.0.0"
 edition = "2024"
 description = "Supply chain security for npm — verify before you install"
 license = "MIT"
@@ -11,40 +11,40 @@ name = "sentinel"
 path = "src/main.rs"
 
 [dependencies]
-# CLI
 clap         = { version = "4.6", features = ["derive", "env"] }
 colored      = "3.1"
 indicatif    = { version = "0.18", features = ["tokio"] }
 
-# HTTP — rustls only, zero OpenSSL
-reqwest      = { version = "0.13", features = ["stream", "rustls", "json"], default-features = false }
+reqwest      = { version = "0.13.3", features = ["stream", "rustls", "json"], default-features = false }
 tokio        = { version = "1.51", features = ["full"] }
 futures-util = "0.3.32"
 bytes        = "1.11"
+flate2       = "1.1.5"
+tar          = "0.4.44"
 
-# Hashing — pure Rust, zero system deps
 sha2         = "0.11"
 base64       = "0.22.1"
-subtle       = "2.6.1"  # constant-time comparison
+subtle       = "2.6.1"
 
-# JSON
 serde        = { version = "1.0.228", features = ["derive"] }
 serde_json   = "1.0.149"
 serde_yaml   = "0.9.34"
 
-# Cache local
 rusqlite     = { version = "0.39", features = ["bundled"] }
 
-# Erros e utils
 thiserror    = "2.0.18"
 chrono       = { version = "0.4.44", features = ["serde"] }
+humantime    = "2.2.0"
+semver       = "1.0.27"
 tracing      = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 dirs         = "6.0.0"
+signal-hook  = "0.4.4"
 
 [dev-dependencies]
 tokio = { version = "1.51", features = ["full", "test-util"] }
 tempfile = "3.27.0"
+temp-env = { version = "0.3.6", features = ["async_closure"] }
 
 [profile.release]
 opt-level     = 3
@@ -55,3 +55,25 @@ panic         = "abort"
 
 [profile.dev]
 opt-level = 1
+
+[lints.rust]
+unsafe_code = "warn"
+unreachable_pub = "warn"
+unused_lifetimes = "warn"
+unused_qualifications = "warn"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+unwrap_used = "warn"
+expect_used = "warn"
+panic = "warn"
+todo = "warn"
+unimplemented = "warn"
+dbg_macro = "deny"
+print_stdout = "allow"
+print_stderr = "allow"

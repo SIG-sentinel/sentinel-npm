@@ -41,6 +41,7 @@ jobs:
     needs: verify-versions
     permissions:
       contents: read
+
     strategy:
       fail-fast: false
       matrix:
@@ -114,6 +115,16 @@ jobs:
           sha256sum sentinel-* > checksums.txt
           popd >/dev/null
 
+      - name: Sign checksums with EC private key
+        shell: bash
+        env:
+          SENTINEL_SIGNING_KEY: ${{ secrets.SENTINEL_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          echo "$SENTINEL_SIGNING_KEY" > /tmp/signing_key.pem
+          openssl dgst -sha256 -sign /tmp/signing_key.pem -out dist/checksums.txt.sig dist/checksums.txt
+          rm -f /tmp/signing_key.pem
+
       - name: Publish GitHub release
         uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe
         with:
@@ -121,6 +132,7 @@ jobs:
           files: |
             dist/sentinel-*
             dist/checksums.txt
+            dist/checksums.txt.sig
 
   validate-binaries:
     needs:
@@ -175,11 +187,25 @@ jobs:
           BIN="$GITHUB_WORKSPACE/${{ matrix.asset }}"
           SENTINEL_NPM_VERSION="$(npm view sentinel-check version)"
           "$BIN" check --cwd "$(pwd)" --format text
+          "$BIN" check --cwd "$(pwd)" --format json | grep -q "sentinel_version"
+          "$BIN" check --cwd "$(pwd)" --format github
+          "$BIN" check --cwd "$(pwd)" --format junit | grep -q "testsuite"
+
           "$BIN" ci --cwd "$(pwd)" --dry-run --format text
-          "$BIN" ci --cwd "$(pwd)" --dry-run --no-scripts --format json --report ../r.json > ../ci.json
+          "$BIN" ci --cwd "$(pwd)" --dry-run --format json --report ../r.json > ../ci.json
           grep -q "sentinel_version" ../ci.json
           test -f ../r.json
+          "$BIN" ci --cwd "$(pwd)" --dry-run --format github
+          "$BIN" ci --cwd "$(pwd)" --dry-run --format junit | grep -q "testsuite"
+
           "$BIN" install "sentinel-check@${SENTINEL_NPM_VERSION}" --cwd "$(pwd)" --dry-run --format text
+
+          SCRIPTS_OUTPUT=$("$BIN" ci --cwd "$(pwd)" --dry-run --format text 2>&1)
+          echo "$SCRIPTS_OUTPUT" | grep -q "lifecycle scripts are blocked" \
+            || { echo "[v2] FAIL: scripts-blocked notice missing from default ci run"; exit 1; }
+          echo "[v2] scripts-blocked default: ok"
+
+          "$BIN" ci --cwd "$(pwd)" --dry-run --allow-scripts --format text
           echo "[${{ matrix.asset }}] all checks passed"
 
       - name: Validate darwin x64 artifact
@@ -205,7 +231,23 @@ jobs:
 
           & $bin check --cwd (Get-Location).Path --format text
           if ($LASTEXITCODE -ne 0) {
-            throw "Windows check smoke failed with exit code $LASTEXITCODE"
+            throw "Windows check failed with exit code $LASTEXITCODE"
+          }
+
+          & $bin ci --cwd (Get-Location).Path --dry-run --format text
+          if ($LASTEXITCODE -ne 0) {
+            throw "Windows ci --dry-run failed with exit code $LASTEXITCODE"
+          }
+
+          $scriptsOutput = & $bin ci --cwd (Get-Location).Path --dry-run --format text 2>&1
+          if ($scriptsOutput -notmatch "lifecycle scripts are blocked") {
+            throw "[v2] FAIL: scripts-blocked notice missing from default ci run on Windows"
+          }
+          Write-Host "[v2] scripts-blocked default: ok"
+
+          & $bin ci --cwd (Get-Location).Path --dry-run --allow-scripts --format text
+          if ($LASTEXITCODE -ne 0) {
+            throw "Windows ci --dry-run --allow-scripts failed with exit code $LASTEXITCODE"
           }
 
           Write-Host "[${{ matrix.asset }}] binary validation passed"
