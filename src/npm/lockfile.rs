@@ -18,7 +18,7 @@ pub(crate) fn process_lockfile_package(
     } = params;
 
     let path_is_empty = package_path.is_empty();
-    
+
     if path_is_empty {
         return None;
     }
@@ -36,7 +36,7 @@ pub(crate) fn process_lockfile_package(
         .to_string();
 
     let version_is_empty = package_version.is_empty();
-    
+
     if version_is_empty {
         return None;
     }
@@ -44,24 +44,23 @@ pub(crate) fn process_lockfile_package(
     let package_integrity = package_metadata
         .get(LOCKFILE_JSON_KEY_INTEGRITY)
         .and_then(|v| v.as_str())
-        .map(|s| s.to_string());
+        .map(ToString::to_string);
 
     let is_dev = package_metadata
         .get(LOCKFILE_JSON_KEY_DEV)
-        .and_then(|v| v.as_bool())
+        .and_then(serde_json::Value::as_bool)
         .unwrap_or(false);
 
     let package_ref = PackageRef::new(package_name, package_version);
     let key = package_ref.to_string();
+    let lockfile_entry = LockfileEntry {
+        package: package_ref,
+        integrity: package_integrity,
+        is_dev,
+        dependencies: Vec::new(),
+    };
 
-    Some((
-        key,
-        LockfileEntry {
-            package: package_ref,
-            integrity: package_integrity,
-            is_dev,
-        },
-    ))
+    Some((key, lockfile_entry))
 }
 
 fn extract_v1_deps(params: ExtractV1DepsParams<'_>) {
@@ -75,7 +74,7 @@ fn extract_v1_deps(params: ExtractV1DepsParams<'_>) {
             .to_string();
 
         let version_is_empty = package_version.is_empty();
-        
+
         if version_is_empty {
             continue;
         }
@@ -83,32 +82,34 @@ fn extract_v1_deps(params: ExtractV1DepsParams<'_>) {
         let package_integrity = package_metadata
             .get(LOCKFILE_JSON_KEY_INTEGRITY)
             .and_then(|integrity_value| integrity_value.as_str())
-            .map(|integrity| integrity.to_string());
+            .map(ToString::to_string);
 
         let is_dev_dependency = package_metadata
             .get(LOCKFILE_JSON_KEY_DEV)
-            .and_then(|is_dev_value| is_dev_value.as_bool())
+            .and_then(serde_json::Value::as_bool)
             .unwrap_or(false);
 
         let package_ref = PackageRef::new(package_name, &package_version);
-        
-        entries.insert(
-            package_ref.to_string(),
-            LockfileEntry {
-                package: package_ref,
-                integrity: package_integrity,
-                is_dev: is_dev_dependency,
-            },
-        );
+        let entry_key = package_ref.to_string();
+        let lockfile_entry = LockfileEntry {
+            package: package_ref,
+            integrity: package_integrity,
+            is_dev: is_dev_dependency,
+            dependencies: Vec::new(),
+        };
+
+        entries.insert(entry_key, lockfile_entry);
 
         if let Some(transitive_dependencies) = package_metadata
             .get(LOCKFILE_JSON_KEY_DEPENDENCIES)
             .and_then(|dependencies| dependencies.as_object())
         {
-            extract_v1_deps(ExtractV1DepsParams {
+            let extract_v1_dependencies_params = ExtractV1DepsParams {
                 deps: transitive_dependencies,
                 entries,
-            });
+            };
+
+            extract_v1_deps(extract_v1_dependencies_params);
         }
     }
 }
@@ -118,7 +119,7 @@ pub fn read_npm_lockfile(
 ) -> Result<HashMap<String, LockfileEntry>, SentinelError> {
     let lock_path = project_dir.join(PACKAGE_LOCK_FILE);
     let lockfile_exists = lock_path.exists();
-    
+
     if !lockfile_exists {
         return Err(SentinelError::LockfileNotFound);
     }
@@ -139,20 +140,22 @@ pub fn read_npm_lockfile(
 
     match (v2_packages, v1_dependencies) {
         (Some(packages), _) => {
-            for (key, entry) in packages.iter().filter_map(|(path, metadata)| {
-                process_lockfile_package(ProcessLockfilePackageParams {
+            entries.extend(packages.iter().filter_map(|(path, metadata)| {
+                let process_lockfile_package_params = ProcessLockfilePackageParams {
                     package_path: path,
                     package_metadata: metadata,
-                })
-            }) {
-                entries.insert(key, entry);
-            }
+                };
+
+                process_lockfile_package(process_lockfile_package_params)
+            }));
         }
         (None, Some(dependencies)) => {
-            extract_v1_deps(ExtractV1DepsParams {
+            let extract_v1_dependencies_params = ExtractV1DepsParams {
                 deps: dependencies,
                 entries: &mut entries,
-            });
+            };
+
+            extract_v1_deps(extract_v1_dependencies_params);
         }
         (None, None) => {}
     }

@@ -3,7 +3,9 @@ use std::path::Path;
 
 use crate::constants::{
     LOCKFILE_JSON_KEY_DEPENDENCIES, LOCKFILE_JSON_KEY_PACKAGES, LOCKFILE_JSON_KEY_VERSION,
-    NODE_MODULES_PREFIX, PACKAGE_LOCK_FILE,
+    PACKAGE_LOCK_FILE,
+    messages::{NESTED_DEP_PATH_TEMPLATE, ROOT_DEP_PATH_TEMPLATE, VERSIONED_DEP_KEY_TEMPLATE},
+    template::render_template,
 };
 use crate::types::{
     DependencyNode, DependencyTree, ProcessLockfilePackageParams, ResolveDependencyKeyParams,
@@ -32,12 +34,14 @@ pub fn build_dependency_tree(project_dir: &Path) -> Result<DependencyTree, Senti
     };
 
     let (mut all_packages, package_key_by_path) = collect_packages(packages);
-    
-    wire_dependencies(WireDependenciesParams {
+
+    let wire_dependencies_params = WireDependenciesParams {
         packages,
         package_key_by_path: &package_key_by_path,
         all_packages: &mut all_packages,
-    });
+    };
+
+    wire_dependencies(wire_dependencies_params);
 
     let mut tree = DependencyTree::new();
 
@@ -55,22 +59,26 @@ fn collect_packages(
     let mut package_key_by_path: HashMap<String, String> = HashMap::new();
 
     for (path, metadata) in packages {
-        let Some((key, entry)) = process_lockfile_package(ProcessLockfilePackageParams {
+        let process_lockfile_package_params = ProcessLockfilePackageParams {
             package_path: path,
             package_metadata: metadata,
-        }) else {
+        };
+
+        let Some((key, entry)) = process_lockfile_package(process_lockfile_package_params) else {
             continue;
         };
 
         package_key_by_path.insert(path.clone(), key.clone());
-        all_packages.insert(
-            key,
-            DependencyNode {
-                package: entry.package.clone(),
-                dependencies: Vec::new(),
-                is_dev: entry.is_dev,
-            },
-        );
+
+        let dependency_node = DependencyNode {
+            package: entry.package.clone(),
+            dependencies: Vec::new(),
+            is_dev: entry.is_dev,
+            is_direct: false,
+            direct_parent: None,
+        };
+
+        all_packages.insert(key, dependency_node);
     }
 
     (all_packages, package_key_by_path)
@@ -99,13 +107,15 @@ fn wire_dependencies(params: WireDependenciesParams<'_>) {
         let mut direct_deps: Vec<String> = deps_obj
             .iter()
             .filter_map(|(dep_name, dep_meta)| {
-                resolve_dep_key(ResolveDependencyKeyParams {
+                let resolve_dependency_key_params = ResolveDependencyKeyParams {
                     package_path: path,
                     dep_name,
                     dep_meta,
                     package_key_by_path,
                     all_packages,
-                })
+                };
+
+                resolve_dep_key(resolve_dependency_key_params)
             })
             .collect();
 
@@ -127,24 +137,30 @@ fn resolve_dep_key(params: ResolveDependencyKeyParams<'_>) -> Option<String> {
         all_packages,
     } = params;
 
-    let nested_dep_path = match package_path.is_empty() {
-        true => format!("{NODE_MODULES_PREFIX}{dep_name}"),
-        false => format!("{package_path}/{NODE_MODULES_PREFIX}{dep_name}"),
-    };
+    let is_root_package = package_path.is_empty();
 
-    let root_dep_path = format!("{NODE_MODULES_PREFIX}{dep_name}");
+    let mut nested_dep_path = render_template(
+        NESTED_DEP_PATH_TEMPLATE,
+        &[package_path.to_string(), dep_name.to_string()],
+    );
+
+    if is_root_package {
+        nested_dep_path = render_template(ROOT_DEP_PATH_TEMPLATE, &[dep_name.to_string()]);
+    }
+
+    let root_dep_path = render_template(ROOT_DEP_PATH_TEMPLATE, &[dep_name.to_string()]);
 
     let nested_dep_key = package_key_by_path.get(&nested_dep_path).cloned();
     let root_dep_key = package_key_by_path.get(&root_dep_path).cloned();
+
     let versioned_dep_key = extract_dep_version(dep_meta).and_then(|version| {
-        let key = format!("{dep_name}@{version}");
+        let key = render_template(VERSIONED_DEP_KEY_TEMPLATE, &[dep_name.to_string(), version]);
+
         all_packages.contains_key(&key).then_some(key)
     });
 
     match (nested_dep_key, root_dep_key, versioned_dep_key) {
-        (Some(key), _, _) => Some(key),
-        (None, Some(key), _) => Some(key),
-        (None, None, Some(key)) => Some(key),
+        (Some(key), _, _) | (None, Some(key), _) | (None, None, Some(key)) => Some(key),
         (None, None, None) => None,
     }
 }
@@ -154,8 +170,8 @@ fn extract_dep_version(dep_meta: &serde_json::Value) -> Option<String> {
         serde_json::Value::Object(obj) => obj
             .get(LOCKFILE_JSON_KEY_VERSION)
             .and_then(|v| v.as_str())
-            .map(|v| v.to_string()),
-        serde_json::Value::String(version_range) => Some(version_range.to_string()),
+            .map(ToString::to_string),
+        serde_json::Value::String(version_range) => Some(version_range.clone()),
         _ => None,
     }
 }

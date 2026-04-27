@@ -1,5 +1,5 @@
 use crate::constants::{PROGRESS_TICK_CHARS, PROGRESS_TICK_MS};
-use crate::types::{OutputFormat, ProgressBarConfig};
+use crate::types::{OutputFormat, ProgressBarConfig, ShouldRenderProgressBarParams};
 use indicatif::{ProgressBar, ProgressStyle};
 use std::io::IsTerminal;
 use std::time::Duration;
@@ -16,6 +16,11 @@ pub fn create_progress_bar(config: ProgressBarConfig) -> ProgressBar {
     progress_bar
 }
 
-pub fn should_render_progress_bar(output_format: &OutputFormat, quiet: bool) -> bool {
+pub fn should_render_progress_bar(params: ShouldRenderProgressBarParams<'_>) -> bool {
+    let ShouldRenderProgressBarParams {
+        output_format,
+        quiet,
+    } = params;
+
     !quiet && matches!(output_format, OutputFormat::Text) && std::io::stderr().is_terminal()
 }

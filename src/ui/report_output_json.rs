@@ -4,12 +4,16 @@ use crate::types::Report;
 pub(super) fn print_json(report: &Report) {
     match serde_json::to_string_pretty(report) {
         Ok(json) => println!("{json}"),
-        Err(error) => eprintln!(
-            "{}",
-            render_template(
-                OUTPUT_JSON_SERIALIZATION_ERROR_TEMPLATE,
-                &[error.to_string()]
-            )
-        ),
+        Err(error) => {
+            let json_serialization_error_template_args = vec![error.to_string()];
+
+            eprintln!(
+                "{}",
+                render_template(
+                    OUTPUT_JSON_SERIALIZATION_ERROR_TEMPLATE,
+                    &json_serialization_error_template_args,
+                )
+            );
+        }
     }
 }

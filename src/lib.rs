@@ -1,8 +1,10 @@
+pub mod artifact_store_config;
 pub mod cache;
 pub mod commands;
 pub mod constants;
 pub mod crypto;
 pub mod ecosystem;
+pub mod history;
 pub mod npm;
 pub mod output;
 pub mod policy;

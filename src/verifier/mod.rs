@@ -1,16 +1,19 @@
+pub mod artifact_cleanup;
 mod install_check;
 mod lockfile_check;
+pub mod memory_budget;
 
 use crate::cache::LocalCache;
 use crate::constants::{INTEGRITY_PREFIX_SHA512, render_template};
 use crate::npm::NpmRegistry;
 use crate::types::{
-    CacheMatchParams, CreateUnverifiableParams, SentinelError, Verdict, VerifierNewParams,
-    VerifyResult,
+    CacheMatchParams, CreateUnverifiableParams, SentinelError, UnverifiableTemplateParams, Verdict,
+    VerifierNewParams, VerifyResult,
 };
 
 pub use crate::types::Verifier;
 pub use crate::types::VerifyResultWithTarball;
+pub(crate) use install_check::compute_tarball_fingerprint_bytes;
 
 pub(super) fn create_unverifiable(params: CreateUnverifiableParams<'_>) -> VerifyResult {
     let CreateUnverifiableParams {
@@ -26,7 +29,41 @@ pub(super) fn create_unverifiable(params: CreateUnverifiableParams<'_>) -> Verif
         verdict: Verdict::Unverifiable { reason },
         detail: render_template(detail_template, template_args),
         evidence,
+        is_direct: false,
+        direct_parent: None,
+        tarball_fingerprint: None,
     }
+}
+
+pub(super) fn create_unverifiable_from_template(
+    params: UnverifiableTemplateParams<'_>,
+) -> VerifyResult {
+    let UnverifiableTemplateParams {
+        reason,
+        package,
+        detail_template,
+        template_args,
+        evidence,
+    } = params;
+
+    let create_unverifiable_params = CreateUnverifiableParams {
+        reason,
+        package,
+        detail_template,
+        template_args: &template_args,
+        evidence,
+    };
+
+    create_unverifiable(create_unverifiable_params)
+}
+
+pub(super) fn cache_unverifiable_from_template(
+    verifier: &Verifier,
+    params: UnverifiableTemplateParams<'_>,
+) -> VerifyResult {
+    let unverifiable = create_unverifiable_from_template(params);
+
+    verifier.cache_and_return(unverifiable)
 }
 
 pub(super) fn cache_matches_lockfile(params: CacheMatchParams<'_>) -> bool {
@@ -35,11 +72,7 @@ pub(super) fn cache_matches_lockfile(params: CacheMatchParams<'_>) -> bool {
         cached_result,
     } = params;
 
-    match (&entry.integrity, &cached_result.evidence.lockfile_integrity) {
-        (Some(current), Some(cached)) => current == cached,
-        (None, None) => true,
-        _ => false,
-    }
+    entry.integrity == cached_result.evidence.lockfile_integrity
 }
 
 pub(super) fn cache_requires_tarball_revalidation(cached_result: &VerifyResult) -> bool {
@@ -71,16 +104,22 @@ impl Verifier {
     pub fn new(params: VerifierNewParams<'_>) -> Result<Self, SentinelError> {
         let VerifierNewParams {
             timeout_ms,
+            current_working_directory,
             cache_dir,
+            artifact_store,
+            max_memory_bytes,
         } = params;
 
         Ok(Self {
-            registry: NpmRegistry::new(timeout_ms)?,
+            registry: NpmRegistry::new(timeout_ms, current_working_directory)?,
             cache: LocalCache::open(cache_dir)?,
+            artifact_store,
+            memory_budget: memory_budget::MemoryBudgetTracker::new(max_memory_bytes),
         })
     }
 }
 
 #[cfg(test)]
+#[allow(clippy::expect_used, clippy::panic)]
 #[path = "../../tests/internal/verifier_tests.rs"]
 mod tests;

@@ -1,15 +1,19 @@
 pub mod check;
+pub mod history;
 pub mod install;
+pub mod main;
+pub mod manager;
 pub mod npm;
 pub mod output;
-pub mod report;
 pub mod ui;
 pub mod verifier;
 
 pub use check::*;
+pub use history::*;
 pub use install::*;
+pub use main::*;
+pub use manager::*;
 pub use npm::*;
 pub use output::*;
-pub use report::*;
 pub use ui::*;
 pub use verifier::*;

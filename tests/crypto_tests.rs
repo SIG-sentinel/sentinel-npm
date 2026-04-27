@@ -1,3 +1,12 @@
+#![allow(
+    clippy::expect_used,
+    clippy::panic,
+    clippy::err_expect,
+    clippy::too_many_arguments,
+    clippy::needless_raw_string_hashes,
+    unused_qualifications
+)]
+
 mod common;
 
 use sha2::{Digest, Sha256};
@@ -15,7 +24,11 @@ fn sha256_empty_string() {
     let mut hasher = Sha256::new();
     hasher.update(EMPTY_INPUT);
     let digest = hasher.finalize();
-    let hash_hex: String = digest.iter().map(|byte| format!("{byte:02x}")).collect();
+    let hash_hex: String = digest.iter().fold(String::new(), |mut acc, byte| {
+        use std::fmt::Write;
+        let _ = write!(acc, "{byte:02x}");
+        acc
+    });
 
     assert_eq!(hash_hex, SHA256_EMPTY_HEX);
 }
@@ -85,5 +98,19 @@ fn verify_integrity_empty_field() {
             integrity_field: "",
         })
         .is_err()
+    );
+}
+
+#[test]
+fn verify_integrity_multi_algorithm_field_prefers_sha512() {
+    let fixture = integrity_fixture(SAMPLE_DATA);
+    let multi_algorithm_integrity = format!("sha1-deadbeef {}", fixture.integrity);
+
+    assert_eq!(
+        verify_integrity(VerifyIntegrityParams {
+            sha512_bytes: &fixture.bytes,
+            integrity_field: &multi_algorithm_integrity,
+        }),
+        Ok(true)
     );
 }

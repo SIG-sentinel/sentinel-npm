@@ -8,11 +8,20 @@ pub struct DependencyNode {
     pub package: PackageRef,
     pub dependencies: Vec<String>,
     pub is_dev: bool,
+    pub is_direct: bool,
+    #[serde(default)]
+    pub direct_parent: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct DependencyTree {
     pub nodes: HashMap<String, DependencyNode>,
+}
+
+pub struct ResolveChildrenForParentAssignmentParams<'a> {
+    pub tree: &'a mut DependencyTree,
+    pub dependency_key: &'a str,
+    pub direct_key: &'a str,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -23,6 +32,14 @@ pub struct DependencyTreeAnalysis {
     pub cycles: Vec<Vec<String>>,
     pub orphaned: Vec<PackageRef>,
     pub max_depth: usize,
+}
+
+struct DfsCycleDetectionParams<'a> {
+    node_key: &'a str,
+    visited: &'a mut HashSet<String>,
+    recursion_stack: &'a mut HashSet<String>,
+    path: &'a mut Vec<String>,
+    cycles: &'a mut Vec<Vec<String>>,
 }
 
 impl DependencyTree {
@@ -60,39 +77,46 @@ impl DependencyTree {
 
         for node_key in self.nodes.keys() {
             if !visited.contains(node_key) {
-                self._dfs_cycle_detection(
+                self.dfs_cycle_detection(DfsCycleDetectionParams {
                     node_key,
-                    &mut visited,
-                    &mut rec_stack,
-                    &mut path,
-                    &mut cycles,
-                );
+                    visited: &mut visited,
+                    recursion_stack: &mut rec_stack,
+                    path: &mut path,
+                    cycles: &mut cycles,
+                });
             }
         }
 
         cycles
     }
 
-    fn _dfs_cycle_detection(
-        &self,
-        node_key: &str,
-        visited: &mut HashSet<String>,
-        rec_stack: &mut HashSet<String>,
-        path: &mut Vec<String>,
-        cycles: &mut Vec<Vec<String>>,
-    ) {
+    fn dfs_cycle_detection(&self, params: DfsCycleDetectionParams<'_>) {
+        let DfsCycleDetectionParams {
+            node_key,
+            visited,
+            recursion_stack,
+            path,
+            cycles,
+        } = params;
+
         visited.insert(node_key.to_string());
-        rec_stack.insert(node_key.to_string());
+        recursion_stack.insert(node_key.to_string());
         path.push(node_key.to_string());
 
         if let Some(node) = self.nodes.get(node_key) {
             for dep in &node.dependencies {
                 if !visited.contains(dep) {
-                    self._dfs_cycle_detection(dep, visited, rec_stack, path, cycles);
+                    self.dfs_cycle_detection(DfsCycleDetectionParams {
+                        node_key: dep,
+                        visited,
+                        recursion_stack,
+                        path,
+                        cycles,
+                    });
                     continue;
                 }
 
-                if !rec_stack.contains(dep) {
+                if !recursion_stack.contains(dep) {
                     continue;
                 }
 
@@ -104,7 +128,7 @@ impl DependencyTree {
         }
 
         path.pop();
-        rec_stack.remove(node_key);
+        recursion_stack.remove(node_key);
     }
 
     pub fn analyze(&self) -> DependencyTreeAnalysis {
@@ -119,36 +143,40 @@ impl DependencyTree {
         let mut transitive_packages = Vec::new();
 
         for (key, node) in &self.nodes {
-            if !all_as_deps.contains(key) {
+            let is_direct_package = !all_as_deps.contains(key);
+            if is_direct_package {
                 direct_packages.push(node.package.clone());
-            } else {
-                transitive_packages.push(node.package.clone());
+
+                continue;
             }
+
+            transitive_packages.push(node.package.clone());
         }
 
         let cycles = self.detect_cycles();
 
         let mut orphaned = Vec::new();
-        let root_keys: HashSet<String> = direct_packages.iter().map(|p| p.to_string()).collect();
+        let root_keys: HashSet<String> = direct_packages.iter().map(ToString::to_string).collect();
 
         for (key, node) in &self.nodes {
-            if !root_keys.contains(key) {
-                let mut is_reachable = false;
-                for root_key in &root_keys {
-                    if let Some(root_node) = self.nodes.get(root_key)
-                        && self.get_transitive_deps(&root_node.package).contains(key)
-                    {
-                        is_reachable = true;
-                        break;
-                    }
-                }
-                if !is_reachable {
-                    orphaned.push(node.package.clone());
-                }
+            if root_keys.contains(key) {
+                continue;
             }
+
+            let is_reachable_from_roots = root_keys.iter().any(|root_key| {
+                self.nodes.get(root_key).is_some_and(|root_node| {
+                    self.get_transitive_deps(&root_node.package).contains(key)
+                })
+            });
+
+            if is_reachable_from_roots {
+                continue;
+            }
+
+            orphaned.push(node.package.clone());
         }
 
-        let max_depth = self._calculate_max_depth();
+        let max_depth = self.calculate_max_depth();
 
         DependencyTreeAnalysis {
             total_packages,
@@ -160,7 +188,7 @@ impl DependencyTree {
         }
     }
 
-    fn _calculate_max_depth(&self) -> usize {
+    fn calculate_max_depth(&self) -> usize {
         let mut max = 1;
 
         let mut all_as_deps = HashSet::new();
@@ -170,7 +198,7 @@ impl DependencyTree {
 
         for key in self.nodes.keys() {
             if !all_as_deps.contains(key) {
-                let depth = self._bfs_max_depth(key);
+                let depth = self.bfs_max_depth(key);
                 max = max.max(depth);
             }
         }
@@ -178,7 +206,7 @@ impl DependencyTree {
         max
     }
 
-    fn _bfs_max_depth(&self, start: &str) -> usize {
+    fn bfs_max_depth(&self, start: &str) -> usize {
         use std::collections::VecDeque;
 
         let mut queue = VecDeque::new();
@@ -190,9 +218,12 @@ impl DependencyTree {
             if visited.insert(node_key.clone()) {
                 max_depth = max_depth.max(depth);
                 if let Some(node) = self.nodes.get(&node_key) {
-                    for dep in &node.dependencies {
-                        queue.push_back((dep.clone(), depth + 1));
-                    }
+                    queue.extend(
+                        node.dependencies
+                            .iter()
+                            .cloned()
+                            .map(|dependency| (dependency, depth + 1)),
+                    );
                 }
             }
         }
@@ -207,8 +238,15 @@ impl DependencyTree {
         }
 
         let mut in_degree: HashMap<String, usize> = HashMap::new();
+        let mut dependents_by_dependency: HashMap<String, Vec<String>> = HashMap::new();
         for (key, node) in &self.nodes {
             in_degree.insert(key.clone(), node.dependencies.len());
+            for dependency in &node.dependencies {
+                dependents_by_dependency
+                    .entry(dependency.clone())
+                    .or_default()
+                    .push(key.clone());
+            }
         }
 
         let mut queue: Vec<String> = in_degree
@@ -222,13 +260,15 @@ impl DependencyTree {
         while let Some(node_key) = queue.pop() {
             sorted.push(node_key.clone());
 
-            for (other_key, other_node) in &self.nodes {
-                if other_node.dependencies.contains(&node_key)
-                    && let Some(degree) = in_degree.get_mut(other_key)
-                {
+            let dependent_keys = dependents_by_dependency
+                .get(&node_key)
+                .cloned()
+                .unwrap_or_default();
+            for dependent_key in dependent_keys {
+                if let Some(degree) = in_degree.get_mut(&dependent_key) {
                     *degree -= 1;
                     if *degree == 0 {
-                        queue.push(other_key.clone());
+                        queue.push(dependent_key);
                     }
                 }
             }

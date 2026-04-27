@@ -14,6 +14,8 @@ fn test_dependency_tree_insert() {
         package: package_reference.clone(),
         dependencies: vec![],
         is_dev: false,
+        is_direct: false,
+        direct_parent: None,
     };
     tree.insert(dependency_node);
     assert_eq!(tree.nodes.len(), 1);

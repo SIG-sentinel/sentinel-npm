@@ -16,6 +16,9 @@ pub const UI_MSG_NO_PACKAGES_TO_VERIFY: &str = "No packages to verify";
 pub const UI_MSG_INVALID_PACKAGE_JSON_TEMPLATE: &str = "sentinel: invalid package.json: {}";
 pub const UI_MSG_INVALID_PACKAGE_FORMAT: &str =
     "sentinel: invalid package format: use <package>@<exact-version>";
+pub const UI_MSG_INVALID_INSTALL_PACKAGE_INPUT_TEMPLATE: &str = "sentinel: invalid package input '{}'.\n\nUse one of:\n  sentinel install <package>\n  sentinel install <package>@latest\n  sentinel install <package>@<exact-version>\n\nTry now:\n  sentinel install {}@latest";
+pub const UI_MSG_INSTALL_CANDIDATE_RESOLVED_TEMPLATE: &str =
+    "\n  {} resolved candidate: {} -> {} (verifying {} transitive dependencies)\n";
 pub const UI_MSG_READ_LOCKFILE_ENTRIES_FAILED_TEMPLATE: &str =
     "sentinel: failed to read lockfile entries: {}";
 pub const UI_MSG_BUILD_DEPENDENCY_TREE_FAILED_TEMPLATE: &str =
@@ -33,13 +36,12 @@ pub const UI_MSG_NPM_CI_STATUS_FAILED_TEMPLATE: &str = "sentinel: npm ci failed 
 pub const UI_MSG_NPM_INSTALL_EXEC_FAILED_TEMPLATE: &str =
     "sentinel: failed to execute npm install: {}";
 pub const UI_MSG_NPM_CI_EXEC_FAILED_TEMPLATE: &str = "sentinel: failed to execute npm ci: {}";
+pub const UI_MSG_SCRIPTS_BLOCKED_BY_DEFAULT: &str = "sentinel: lifecycle scripts are blocked by default; pass --allow-scripts to enable them for this run.";
 pub const UI_MSG_ROLLBACK_FAILED_TEMPLATE: &str = "sentinel: failed to rollback project files: {}";
 pub const UI_MSG_SAVE_REPORT_FAILED_TEMPLATE: &str = "sentinel: failed to save report: {}";
 pub const UI_MSG_SERIALIZE_REPORT_FAILED_TEMPLATE: &str =
     "sentinel: failed to serialize report: {}";
 
-pub const UI_GITHUB_WARNING_FORMAT: &str = "::warning title={},file={}::{} — {:?}";
+pub const UI_GITHUB_WARNING_FORMAT: &str = "::warning title={},file={}::{} — {}";
 pub const UI_JUNIT_SYSTEM_OUT_TEMPLATE: &str =
     "      <system-out>UNVERIFIABLE: {:?} — {}</system-out>";
-
-pub const UI_REPORT_HEADER_SYMBOL_TEMPLATE: &str = "\n  {} Thank you for reporting {}.";

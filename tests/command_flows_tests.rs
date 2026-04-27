@@ -1,7 +1,14 @@
+#![allow(
+    clippy::expect_used,
+    clippy::needless_raw_string_hashes,
+    unused_qualifications
+)]
+
+use std::fs;
 use std::process::ExitCode;
 
 use sentinel::commands;
-use sentinel::types::{CheckArgs, CiArgs, OutputFormat};
+use sentinel::types::{CheckArgs, CiArgs, InstallArgs, OutputFormat};
 
 fn write_empty_lockfile(dir: &std::path::Path) {
     let lockfile = r#"
@@ -101,6 +108,7 @@ async fn test_check_run_succeeds_with_empty_graph() {
         omit_optional: false,
         format: OutputFormat::Json,
         cwd: temp_dir.path().to_path_buf(),
+        package_manager: None,
         timeout: 1000,
         quiet: true,
     };
@@ -112,7 +120,6 @@ async fn test_check_run_succeeds_with_empty_graph() {
 #[tokio::test]
 async fn test_ci_run_succeeds_with_empty_graph() {
     let temp_dir = tempfile::tempdir().expect("tempdir should be created");
-    // No external dependencies → packages_to_verify is empty → early exit, no report written
     std::fs::write(
         temp_dir.path().join("package.json"),
         r#"{"name":"demo","version":"1.0.0","dependencies":{}}"#,
@@ -125,11 +132,13 @@ async fn test_ci_run_succeeds_with_empty_graph() {
         omit_dev: false,
         omit_optional: false,
         allow_scripts: false,
-        no_scripts: false,
         dry_run: true,
+        post_verify: false,
+        init_lockfile: false,
         format: OutputFormat::Json,
         report: report_path.clone(),
         cwd: temp_dir.path().to_path_buf(),
+        package_manager: None,
         timeout: 1000,
         quiet: true,
     };
@@ -153,6 +162,7 @@ async fn test_check_run_fails_when_cycle_exists() {
         omit_optional: false,
         format: OutputFormat::Json,
         cwd: temp_dir.path().to_path_buf(),
+        package_manager: None,
         timeout: 1000,
         quiet: true,
     };
@@ -171,11 +181,13 @@ async fn test_ci_run_fails_when_cycle_exists() {
         omit_dev: false,
         omit_optional: false,
         allow_scripts: false,
-        no_scripts: false,
         dry_run: true,
+        post_verify: false,
+        init_lockfile: false,
         format: OutputFormat::Json,
         report: temp_dir.path().join("report.json"),
         cwd: temp_dir.path().to_path_buf(),
+        package_manager: None,
         timeout: 1000,
         quiet: true,
     };
@@ -186,38 +198,306 @@ async fn test_ci_run_fails_when_cycle_exists() {
 
 #[tokio::test]
 async fn test_check_run_succeeds_with_yarn_lockfile() {
-  let temp_dir = tempfile::tempdir().expect("tempdir should be created");
-  write_package_json(temp_dir.path());
-  write_yarn_lockfile(temp_dir.path());
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    write_package_json(temp_dir.path());
+    write_yarn_lockfile(temp_dir.path());
 
-  let args = CheckArgs {
-    omit_dev: false,
-    omit_optional: false,
-    format: OutputFormat::Json,
-    cwd: temp_dir.path().to_path_buf(),
-    timeout: 1000,
-    quiet: true,
-  };
+    let args = CheckArgs {
+        omit_dev: false,
+        omit_optional: false,
+        format: OutputFormat::Json,
+        cwd: temp_dir.path().to_path_buf(),
+        package_manager: None,
+        timeout: 1000,
+        quiet: true,
+    };
 
-  let exit = commands::check::run(&args).await;
-  assert_eq!(exit, ExitCode::SUCCESS);
+    let exit = commands::check::run(&args).await;
+    assert_eq!(exit, ExitCode::SUCCESS);
+}
+
+#[tokio::test]
+async fn test_check_fails_when_no_lockfile_exists() {
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    write_package_json(temp_dir.path());
+
+    let args = CheckArgs {
+        omit_dev: false,
+        omit_optional: false,
+        format: OutputFormat::Json,
+        cwd: temp_dir.path().to_path_buf(),
+        package_manager: Some("npm".to_string()),
+        timeout: 1000,
+        quiet: true,
+    };
+
+    let exit = commands::check::run(&args).await;
+    assert_eq!(
+        exit,
+        ExitCode::FAILURE,
+        "check must fail when no lockfile exists"
+    );
+}
+
+#[tokio::test]
+async fn test_check_does_not_generate_lockfile_when_missing() {
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    write_package_json(temp_dir.path());
+
+    let args = CheckArgs {
+        omit_dev: false,
+        omit_optional: false,
+        format: OutputFormat::Json,
+        cwd: temp_dir.path().to_path_buf(),
+        package_manager: Some("npm".to_string()),
+        timeout: 1000,
+        quiet: true,
+    };
+
+    let _ = commands::check::run(&args).await;
+
+    assert!(
+        !temp_dir.path().join("package-lock.json").exists(),
+        "check must not generate package-lock.json"
+    );
+    assert!(
+        !temp_dir.path().join("yarn.lock").exists(),
+        "check must not generate yarn.lock"
+    );
+    assert!(
+        !temp_dir.path().join("pnpm-lock.yaml").exists(),
+        "check must not generate pnpm-lock.yaml"
+    );
+}
+
+#[tokio::test]
+async fn test_ci_preserves_existing_lockfile_contents() {
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    std::fs::write(
+        temp_dir.path().join("package.json"),
+        r#"{"name":"demo","version":"1.0.0","dependencies":{}}"#,
+    )
+    .expect("package.json should be written");
+    write_empty_lockfile(temp_dir.path());
+
+    let lockfile_path = temp_dir.path().join("package-lock.json");
+    let contents_before = fs::read_to_string(&lockfile_path).expect("lockfile should be readable");
+
+    let args = CiArgs {
+        omit_dev: false,
+        omit_optional: false,
+        allow_scripts: false,
+        dry_run: true,
+        post_verify: false,
+        init_lockfile: false,
+        format: OutputFormat::Json,
+        report: temp_dir.path().join("report.json"),
+        cwd: temp_dir.path().to_path_buf(),
+        package_manager: None,
+        timeout: 1000,
+        quiet: true,
+    };
+
+    let _ = commands::install::run_ci(&args).await;
+
+    let contents_after = fs::read_to_string(&lockfile_path).expect("lockfile should still exist");
+    assert_eq!(
+        contents_before, contents_after,
+        "ci must not modify an existing lockfile"
+    );
+}
+
+#[tokio::test]
+async fn test_ci_fails_when_no_lockfile_exists_without_init_flag() {
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    write_package_json(temp_dir.path());
+
+    let args = CiArgs {
+        omit_dev: false,
+        omit_optional: false,
+        allow_scripts: false,
+        dry_run: true,
+        post_verify: false,
+        init_lockfile: false,
+        format: OutputFormat::Json,
+        report: temp_dir.path().join("report.json"),
+        cwd: temp_dir.path().to_path_buf(),
+        package_manager: Some("npm".to_string()),
+        timeout: 1000,
+        quiet: true,
+    };
+
+    let exit = commands::install::run_ci(&args).await;
+
+    assert_eq!(
+        exit,
+        ExitCode::FAILURE,
+        "ci must fail when lockfile is missing and --init is not enabled"
+    );
+    assert!(
+        !temp_dir.path().join("package-lock.json").exists(),
+        "ci must not generate lockfile without --init"
+    );
+}
+
+#[tokio::test]
+async fn test_ci_initializes_lockfile_when_init_flag_is_enabled() {
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    std::fs::write(
+        temp_dir.path().join("package.json"),
+        r#"{"name":"demo","version":"1.0.0","dependencies":{}}"#,
+    )
+    .expect("package.json should be written");
+
+    let args = CiArgs {
+        omit_dev: false,
+        omit_optional: false,
+        allow_scripts: false,
+        dry_run: true,
+        post_verify: false,
+        init_lockfile: true,
+        format: OutputFormat::Json,
+        report: temp_dir.path().join("report.json"),
+        cwd: temp_dir.path().to_path_buf(),
+        package_manager: Some("npm".to_string()),
+        timeout: 1000,
+        quiet: true,
+    };
+
+    let exit = commands::install::run_ci(&args).await;
+
+    assert_eq!(
+        exit,
+        ExitCode::SUCCESS,
+        "ci should proceed when lockfile is missing and --init is enabled"
+    );
+    assert!(
+        temp_dir.path().join("package-lock.json").exists(),
+        "ci --init should create package-lock.json"
+    );
+}
+
+#[tokio::test]
+async fn test_ci_init_autodetects_manager_from_package_json_and_generates_lockfile() {
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    std::fs::write(
+        temp_dir.path().join("package.json"),
+        r#"{"name":"demo","version":"1.0.0","packageManager":"npm@10.9.0","dependencies":{}}"#,
+    )
+    .expect("package.json should be written");
+
+    let args = CiArgs {
+        omit_dev: false,
+        omit_optional: false,
+        allow_scripts: false,
+        dry_run: true,
+        post_verify: false,
+        init_lockfile: true,
+        format: OutputFormat::Text,
+        report: temp_dir.path().join("report.json"),
+        cwd: temp_dir.path().to_path_buf(),
+        package_manager: None,
+        timeout: 1000,
+        quiet: false,
+    };
+
+    let exit = commands::install::run_ci(&args).await;
+
+    assert_eq!(
+        exit,
+        ExitCode::SUCCESS,
+        "ci --init should succeed when manager is auto-detected from package.json"
+    );
+    assert!(
+        temp_dir.path().join("package-lock.json").exists(),
+        "ci --init should create package-lock.json after auto-detection"
+    );
+}
+
+#[tokio::test]
+async fn test_ci_init_does_not_regenerate_existing_lockfile() {
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    std::fs::write(
+        temp_dir.path().join("package.json"),
+        r#"{"name":"demo","version":"1.0.0","dependencies":{}}"#,
+    )
+    .expect("package.json should be written");
+    write_empty_lockfile(temp_dir.path());
+
+    let lockfile_path = temp_dir.path().join("package-lock.json");
+    let contents_before = fs::read_to_string(&lockfile_path).expect("lockfile should be readable");
+
+    let args = CiArgs {
+        omit_dev: false,
+        omit_optional: false,
+        allow_scripts: false,
+        dry_run: true,
+        post_verify: false,
+        init_lockfile: true,
+        format: OutputFormat::Json,
+        report: temp_dir.path().join("report.json"),
+        cwd: temp_dir.path().to_path_buf(),
+        package_manager: Some("npm".to_string()),
+        timeout: 1000,
+        quiet: true,
+    };
+
+    let exit = commands::install::run_ci(&args).await;
+
+    assert_eq!(
+        exit,
+        ExitCode::SUCCESS,
+        "ci should remain successful with existing lockfile"
+    );
+
+    let contents_after = fs::read_to_string(&lockfile_path).expect("lockfile should still exist");
+    assert_eq!(
+        contents_before, contents_after,
+        "ci --init must not mutate an already existing lockfile"
+    );
+}
+
+#[tokio::test]
+async fn test_install_fails_when_no_lockfile_exists() {
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    write_package_json(temp_dir.path());
+
+    let args = InstallArgs {
+        package: "lodash@4.17.21".to_string(),
+        allow_scripts: false,
+        dry_run: true,
+        post_verify: false,
+        format: OutputFormat::Json,
+        cwd: temp_dir.path().to_path_buf(),
+        package_manager: Some("npm".to_string()),
+        timeout: 1000,
+        quiet: true,
+    };
+
+    let exit = commands::install::run_install(&args).await;
+    assert_eq!(
+        exit,
+        ExitCode::FAILURE,
+        "install must fail when no lockfile exists"
+    );
 }
 
 #[tokio::test]
 async fn test_check_run_succeeds_with_pnpm_lockfile() {
-  let temp_dir = tempfile::tempdir().expect("tempdir should be created");
-  write_package_json(temp_dir.path());
-  write_pnpm_lockfile(temp_dir.path());
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    write_package_json(temp_dir.path());
+    write_pnpm_lockfile(temp_dir.path());
 
-  let args = CheckArgs {
-    omit_dev: false,
-    omit_optional: false,
-    format: OutputFormat::Json,
-    cwd: temp_dir.path().to_path_buf(),
-    timeout: 1000,
-    quiet: true,
-  };
+    let args = CheckArgs {
+        omit_dev: false,
+        omit_optional: false,
+        format: OutputFormat::Json,
+        cwd: temp_dir.path().to_path_buf(),
+        package_manager: None,
+        timeout: 1000,
+        quiet: true,
+    };
 
-  let exit = commands::check::run(&args).await;
-  assert_eq!(exit, ExitCode::SUCCESS);
+    let exit = commands::check::run(&args).await;
+    assert_eq!(exit, ExitCode::SUCCESS);
 }

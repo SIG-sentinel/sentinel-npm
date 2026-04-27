@@ -1,3 +1,12 @@
+#![allow(
+    clippy::expect_used,
+    clippy::panic,
+    clippy::err_expect,
+    clippy::too_many_arguments,
+    clippy::needless_raw_string_hashes,
+    unused_qualifications
+)]
+
 use clap::Parser;
 use sentinel::types::{Cli, Commands, OutputFormat};
 
@@ -59,27 +68,26 @@ fn test_ci_command_defaults() {
         Commands::Ci(args) => {
             assert!(!args.omit_dev);
             assert!(!args.omit_optional);
-            assert!(!args.allow_scripts);
-            assert!(!args.no_scripts);
+            assert!(!args.allow_scripts, "scripts should be blocked by default");
             assert!(!args.dry_run);
             assert!(!args.quiet);
             assert_eq!(args.format, OutputFormat::Text);
             assert_eq!(args.report.to_string_lossy(), "sentinel-report.json");
             assert_eq!(args.timeout, sentinel::constants::CI_REGISTRY_TIMEOUT_MS);
+            assert!(!args.post_verify);
         }
         _ => panic!("expected ci command"),
     }
 }
 
 #[test]
-fn test_ci_command_with_all_flags() {
+fn test_ci_command_with_allow_scripts_flag() {
     let cli = Cli::try_parse_from([
         "sentinel",
         "ci",
         "--omit-dev",
         "--omit-optional",
         "--allow-scripts",
-        "--no-scripts",
         "--dry-run",
         "--format",
         "text",
@@ -89,6 +97,7 @@ fn test_ci_command_with_all_flags() {
         "./project",
         "--timeout",
         "12000",
+        "--post-verify",
         "--quiet",
     ])
     .expect("ci with flags should parse");
@@ -97,14 +106,14 @@ fn test_ci_command_with_all_flags() {
         Commands::Ci(args) => {
             assert!(args.omit_dev);
             assert!(args.omit_optional);
-            assert!(args.allow_scripts);
-            assert!(args.no_scripts);
+            assert!(args.allow_scripts, "--allow-scripts should enable scripts");
             assert!(args.dry_run);
             assert!(args.quiet);
             assert_eq!(args.format, OutputFormat::Text);
             assert_eq!(args.report.to_string_lossy(), "./out/report.json");
             assert_eq!(args.cwd.to_string_lossy(), "./project");
             assert_eq!(args.timeout, 12000);
+            assert!(args.post_verify);
         }
         _ => panic!("expected ci command"),
     }
@@ -124,8 +133,7 @@ fn test_install_command_defaults() {
     match cli.command {
         Commands::Install(args) => {
             assert_eq!(args.package, "left-pad@1.3.0");
-            assert!(!args.allow_scripts);
-            assert!(!args.no_scripts);
+            assert!(!args.allow_scripts, "scripts should be blocked by default");
             assert!(!args.dry_run);
             assert!(!args.quiet);
             assert_eq!(
@@ -134,19 +142,19 @@ fn test_install_command_defaults() {
             );
             assert_eq!(args.format, OutputFormat::Text);
             assert_eq!(args.cwd.to_string_lossy(), ".");
+            assert!(!args.post_verify);
         }
         _ => panic!("expected install command"),
     }
 }
 
 #[test]
-fn test_install_command_with_flags() {
+fn test_install_command_with_allow_scripts_flag() {
     let cli = Cli::try_parse_from([
         "sentinel",
         "install",
         "@scope/pkg@2.0.1",
         "--allow-scripts",
-        "--no-scripts",
         "--dry-run",
         "--format",
         "json",
@@ -154,6 +162,7 @@ fn test_install_command_with_flags() {
         "./project",
         "--timeout",
         "8000",
+        "--post-verify",
         "--quiet",
     ])
     .expect("install with flags should parse");
@@ -161,46 +170,27 @@ fn test_install_command_with_flags() {
     match cli.command {
         Commands::Install(args) => {
             assert_eq!(args.package, "@scope/pkg@2.0.1");
-            assert!(args.allow_scripts);
-            assert!(args.no_scripts);
+            assert!(args.allow_scripts, "--allow-scripts should enable scripts");
             assert!(args.dry_run);
             assert!(args.quiet);
             assert_eq!(args.timeout, 8000);
             assert_eq!(args.format, OutputFormat::Json);
             assert_eq!(args.cwd.to_string_lossy(), "./project");
+            assert!(args.post_verify);
         }
         _ => panic!("expected install command"),
     }
 }
 
 #[test]
-fn test_report_command_parsing() {
-    let cli = Cli::try_parse_from([
-        "sentinel",
-        "report",
-        "left-pad@1.3.0",
-        "--reason",
-        "suspicious lifecycle script",
-        "--evidence",
-        "postinstall curl",
-    ])
-    .expect("report should parse");
+fn test_install_command_accepts_range_version_for_candidate_resolution() {
+    let cli = Cli::try_parse_from(["sentinel", "install", "left-pad@^1.3.0"])
+        .expect("install should accept semver ranges for candidate resolution");
 
     match cli.command {
-        Commands::Report(args) => {
-            assert_eq!(args.package, "left-pad@1.3.0");
-            assert_eq!(args.reason, "suspicious lifecycle script");
-            assert_eq!(args.evidence.as_deref(), Some("postinstall curl"));
+        Commands::Install(args) => {
+            assert_eq!(args.package, "left-pad@^1.3.0");
         }
-        _ => panic!("expected report command"),
+        _ => panic!("expected install command"),
     }
-}
-
-#[test]
-fn test_install_command_rejects_range_version() {
-    let parsed = Cli::try_parse_from(["sentinel", "install", "left-pad@^1.3.0"]);
-    assert!(
-        parsed.is_err(),
-        "install must reject non-exact semver ranges"
-    );
 }

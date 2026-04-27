@@ -6,6 +6,7 @@ pub struct SummaryPolicyInput {
     pub clean: u32,
     pub compromised: u32,
     pub unverifiable: u32,
+    pub blocking_unverifiable: u32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -19,7 +20,7 @@ pub struct InstallPolicyInput {
     pub compromised_count: usize,
     pub unverifiable_count: usize,
     pub allow_scripts: bool,
-    pub no_scripts: bool,
+    pub post_verify: bool,
 }
 
 #[derive(Debug, Clone, Copy)]

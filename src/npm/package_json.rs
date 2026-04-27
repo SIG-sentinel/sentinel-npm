@@ -16,7 +16,7 @@ pub fn read_package_json_deps(
 
     let path = project_dir.join(PACKAGE_JSON_FILE);
     let path_exists = path.exists();
-    
+
     if !path_exists {
         return Err(SentinelError::PackageJsonNotFound {
             path: project_dir.display().to_string(),
@@ -38,20 +38,24 @@ pub fn read_package_json_deps(
     let mut dependencies_by_name = HashMap::new();
 
     for dependency_key in dependency_keys {
-        if let Some(dependency_map) = package_json
+        let Some(dependency_map) = package_json
             .get(dependency_key)
             .and_then(|value| value.as_object())
-        {
-            dependencies_by_name.extend(dependency_map.iter().map(|(name, version)| {
-                (
-                    name.clone(),
-                    version
-                        .as_str()
-                        .unwrap_or(PACKAGE_VERSION_DEFAULT_RANGE)
-                        .to_string(),
-                )
-            }));
-        }
+        else {
+            continue;
+        };
+
+        let resolved = dependency_map.iter().map(|(name, version)| {
+            let dep_name = name.clone();
+            let dep_version = version
+                .as_str()
+                .unwrap_or(PACKAGE_VERSION_DEFAULT_RANGE)
+                .to_string();
+
+            (dep_name, dep_version)
+        });
+
+        dependencies_by_name.extend(resolved);
     }
 
     Ok(dependencies_by_name)

@@ -1,4 +1,5 @@
 pub const INTEGRITY_PREFIX_SHA512: &str = "sha512-";
+pub const INTEGRITY_PREFIX_SHA1: &str = "sha1-";
 pub const INTEGRITY_SHORT_LEN: usize = 24;
 pub const BYTES_PER_MIB: f64 = 1024.0 * 1024.0;
 

@@ -1,12 +1,15 @@
+#![allow(clippy::expect_used, clippy::needless_raw_string_hashes)]
+
 use std::fs;
 
 use sentinel::ecosystem::{
-    InstallExecutor, LockfileParser, NpmLockfileParser, PackageManager,
-    PackageManagerExecutor, PnpmLockfileParser, YarnLockfileParser, compare_integrity,
-    detect_package_manager, read_lockfile_entries, active_lockfile_path,
+    InstallExecutor, LockfileParser, NpmLockfileParser, PackageManager, PackageManagerExecutor,
+    PnpmLockfileParser, YarnLockfileParser, active_lockfile_path, compare_integrity,
+    detect_package_manager, read_lockfile_entries, resolve_package_manager,
 };
 use sentinel::types::CleanInstallPlanParams;
 use sentinel::types::ComparisonVerdict;
+use sentinel::types::ResolvePackageManagerParams;
 use sentinel::types::SentinelError;
 use tempfile::tempdir;
 
@@ -142,11 +145,50 @@ fn detects_package_manager_prefers_lockfile_over_package_manager_field() {
         r#"{"name":"demo","version":"1.0.0","packageManager":"yarn@1.22.22"}"#,
     )
     .expect("write package.json");
-    fs::write(temp.path().join("package-lock.json"), "{}")
-        .expect("write package-lock.json");
+    fs::write(temp.path().join("package-lock.json"), "{}").expect("write package-lock.json");
 
     let manager = detect_package_manager(temp.path());
     assert_eq!(manager, Some(PackageManager::Npm));
+}
+
+#[test]
+fn resolve_package_manager_error_is_actionable_without_lockfile() {
+    let temp = tempdir().expect("temp dir");
+
+    let resolve_package_manager_params = ResolvePackageManagerParams {
+        project_dir: temp.path(),
+        explicit_pm: None,
+        command_hint: "sentinel check",
+    };
+
+    let result = resolve_package_manager(&resolve_package_manager_params);
+
+    assert!(result.is_err());
+    let message = result.expect_err("missing lockfile should return setup guidance");
+    assert!(message.contains("package manager auto-detection failed"));
+    assert!(message.contains("sentinel check --package-manager npm"));
+    assert!(message.contains("sentinel ci --init"));
+}
+
+#[test]
+fn resolve_package_manager_error_lists_conflicting_lockfiles() {
+    let temp = tempdir().expect("temp dir");
+    fs::write(temp.path().join("package-lock.json"), "{}").expect("write package-lock.json");
+    fs::write(temp.path().join("yarn.lock"), "").expect("write yarn.lock");
+
+    let resolve_package_manager_params = ResolvePackageManagerParams {
+        project_dir: temp.path(),
+        explicit_pm: None,
+        command_hint: "sentinel ci",
+    };
+
+    let result = resolve_package_manager(&resolve_package_manager_params);
+
+    assert!(result.is_err());
+    let message = result.expect_err("conflicting lockfiles should return setup guidance");
+    assert!(message.contains("Detected lockfiles: package-lock.json, yarn.lock."));
+    assert!(message.contains("sentinel ci --package-manager npm"));
+    assert!(message.contains("sentinel ci --package-manager yarn"));
 }
 
 #[test]
@@ -197,7 +239,9 @@ fn yarn_lockfile_parser_keeps_entry_without_integrity_as_none() {
     fs::write(temp.path().join("yarn.lock"), yarn_lock).expect("write yarn.lock");
 
     let entries = read_lockfile_entries(temp.path()).expect("parse entries");
-    let entry = entries.get("lodash@4.17.21").expect("lodash entry should exist");
+    let entry = entries
+        .get("lodash@4.17.21")
+        .expect("lodash entry should exist");
 
     assert_eq!(entry.integrity, None);
 }
