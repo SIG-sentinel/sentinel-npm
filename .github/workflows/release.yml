@@ -118,7 +118,7 @@ jobs:
       - name: Sign checksums with EC private key
         shell: bash
         env:
-          SENTINEL_SIGNING_KEY: ${{ secrets.SENTINEL_SIGNING_KEY }}
+          SENTINEL_SIGNING_KEY: ${{ secrets.INSTALL_CHECK }}
         run: |
           set -euo pipefail
           echo "$SENTINEL_SIGNING_KEY" > /tmp/signing_key.pem
