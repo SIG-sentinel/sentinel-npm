@@ -196,8 +196,8 @@ jobs:
 
             printf '%s\n' "$output"
 
-            if printf '%s' "$output" | grep -q "ProvenanceMissing" && \
-              ! printf '%s' "$output" | grep -q "Compromised"; then
+            if printf '%s' "$output" | grep -Eiq "ProvenanceMissing|provenance not available" && \
+              ! printf '%s' "$output" | grep -Eiq "Compromised|compromised"; then
               echo "[release] allowing ProvenanceMissing-only validation result"
               return 0
             fi
@@ -265,7 +265,7 @@ jobs:
               return $text
             }
 
-            $hasProvenanceMissing = $text -match "ProvenanceMissing"
+            $hasProvenanceMissing = ($text -match "ProvenanceMissing") -or ($text -match "provenance not available")
             $hasCompromised = $text -match "Compromised"
 
             if ($hasProvenanceMissing -and -not $hasCompromised) {
