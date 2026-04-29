@@ -1,4 +1,5 @@
 pub mod check;
+pub mod cli;
 pub mod history;
 pub mod install;
 pub mod main;
@@ -9,6 +10,7 @@ pub mod ui;
 pub mod verifier;
 
 pub use check::*;
+pub use cli::*;
 pub use history::*;
 pub use install::*;
 pub use main::*;

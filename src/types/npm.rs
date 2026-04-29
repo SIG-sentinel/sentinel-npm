@@ -174,6 +174,13 @@ pub struct ResolveTimedResponseParams {
     pub timeout_error: SentinelError,
 }
 
+#[derive(Clone, Copy)]
+pub struct NpmRegistryNewParams<'a> {
+    pub timeout_ms: u64,
+    pub registry_max_in_flight: Option<usize>,
+    pub current_working_directory: &'a Path,
+}
+
 pub(crate) enum NpmrcEntryKind {
     DefaultRegistry,
     ScopedRegistry,

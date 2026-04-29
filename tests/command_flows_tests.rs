@@ -10,6 +10,8 @@ use std::process::ExitCode;
 use sentinel::commands;
 use sentinel::types::{CheckArgs, CiArgs, InstallArgs, OutputFormat};
 
+const TEST_TIMEOUT_MS: u64 = 1000;
+
 fn write_empty_lockfile(dir: &std::path::Path) {
     let lockfile = r#"
 {
@@ -109,7 +111,8 @@ async fn test_check_run_succeeds_with_empty_graph() {
         format: OutputFormat::Json,
         cwd: temp_dir.path().to_path_buf(),
         package_manager: None,
-        timeout: 1000,
+        timeout: TEST_TIMEOUT_MS,
+        registry_max_in_flight: None,
         quiet: true,
     };
 
@@ -139,7 +142,8 @@ async fn test_ci_run_succeeds_with_empty_graph() {
         report: report_path.clone(),
         cwd: temp_dir.path().to_path_buf(),
         package_manager: None,
-        timeout: 1000,
+        timeout: TEST_TIMEOUT_MS,
+        registry_max_in_flight: None,
         quiet: true,
     };
 
@@ -163,7 +167,8 @@ async fn test_check_run_fails_when_cycle_exists() {
         format: OutputFormat::Json,
         cwd: temp_dir.path().to_path_buf(),
         package_manager: None,
-        timeout: 1000,
+        timeout: TEST_TIMEOUT_MS,
+        registry_max_in_flight: None,
         quiet: true,
     };
 
@@ -188,7 +193,8 @@ async fn test_ci_run_fails_when_cycle_exists() {
         report: temp_dir.path().join("report.json"),
         cwd: temp_dir.path().to_path_buf(),
         package_manager: None,
-        timeout: 1000,
+        timeout: TEST_TIMEOUT_MS,
+        registry_max_in_flight: None,
         quiet: true,
     };
 
@@ -208,7 +214,8 @@ async fn test_check_run_succeeds_with_yarn_lockfile() {
         format: OutputFormat::Json,
         cwd: temp_dir.path().to_path_buf(),
         package_manager: None,
-        timeout: 1000,
+        timeout: TEST_TIMEOUT_MS,
+        registry_max_in_flight: None,
         quiet: true,
     };
 
@@ -227,7 +234,8 @@ async fn test_check_fails_when_no_lockfile_exists() {
         format: OutputFormat::Json,
         cwd: temp_dir.path().to_path_buf(),
         package_manager: Some("npm".to_string()),
-        timeout: 1000,
+        timeout: TEST_TIMEOUT_MS,
+        registry_max_in_flight: None,
         quiet: true,
     };
 
@@ -250,7 +258,8 @@ async fn test_check_does_not_generate_lockfile_when_missing() {
         format: OutputFormat::Json,
         cwd: temp_dir.path().to_path_buf(),
         package_manager: Some("npm".to_string()),
-        timeout: 1000,
+        timeout: TEST_TIMEOUT_MS,
+        registry_max_in_flight: None,
         quiet: true,
     };
 
@@ -294,7 +303,8 @@ async fn test_ci_preserves_existing_lockfile_contents() {
         report: temp_dir.path().join("report.json"),
         cwd: temp_dir.path().to_path_buf(),
         package_manager: None,
-        timeout: 1000,
+        timeout: TEST_TIMEOUT_MS,
+        registry_max_in_flight: None,
         quiet: true,
     };
 
@@ -323,7 +333,8 @@ async fn test_ci_fails_when_no_lockfile_exists_without_init_flag() {
         report: temp_dir.path().join("report.json"),
         cwd: temp_dir.path().to_path_buf(),
         package_manager: Some("npm".to_string()),
-        timeout: 1000,
+        timeout: TEST_TIMEOUT_MS,
+        registry_max_in_flight: None,
         quiet: true,
     };
 
@@ -332,11 +343,11 @@ async fn test_ci_fails_when_no_lockfile_exists_without_init_flag() {
     assert_eq!(
         exit,
         ExitCode::FAILURE,
-        "ci must fail when lockfile is missing and --init is not enabled"
+        "ci must fail when lockfile is missing and --init-lockfile is not enabled"
     );
     assert!(
         !temp_dir.path().join("package-lock.json").exists(),
-        "ci must not generate lockfile without --init"
+        "ci must not generate lockfile without --init-lockfile"
     );
 }
 
@@ -360,7 +371,8 @@ async fn test_ci_initializes_lockfile_when_init_flag_is_enabled() {
         report: temp_dir.path().join("report.json"),
         cwd: temp_dir.path().to_path_buf(),
         package_manager: Some("npm".to_string()),
-        timeout: 1000,
+        timeout: TEST_TIMEOUT_MS,
+        registry_max_in_flight: None,
         quiet: true,
     };
 
@@ -369,11 +381,11 @@ async fn test_ci_initializes_lockfile_when_init_flag_is_enabled() {
     assert_eq!(
         exit,
         ExitCode::SUCCESS,
-        "ci should proceed when lockfile is missing and --init is enabled"
+        "ci should proceed when lockfile is missing and --init-lockfile is enabled"
     );
     assert!(
         temp_dir.path().join("package-lock.json").exists(),
-        "ci --init should create package-lock.json"
+        "ci --init-lockfile should create package-lock.json"
     );
 }
 
@@ -397,7 +409,8 @@ async fn test_ci_init_autodetects_manager_from_package_json_and_generates_lockfi
         report: temp_dir.path().join("report.json"),
         cwd: temp_dir.path().to_path_buf(),
         package_manager: None,
-        timeout: 1000,
+        timeout: TEST_TIMEOUT_MS,
+        registry_max_in_flight: None,
         quiet: false,
     };
 
@@ -406,11 +419,11 @@ async fn test_ci_init_autodetects_manager_from_package_json_and_generates_lockfi
     assert_eq!(
         exit,
         ExitCode::SUCCESS,
-        "ci --init should succeed when manager is auto-detected from package.json"
+        "ci --init-lockfile should succeed when manager is auto-detected from package.json"
     );
     assert!(
         temp_dir.path().join("package-lock.json").exists(),
-        "ci --init should create package-lock.json after auto-detection"
+        "ci --init-lockfile should create package-lock.json after auto-detection"
     );
 }
 
@@ -438,7 +451,8 @@ async fn test_ci_init_does_not_regenerate_existing_lockfile() {
         report: temp_dir.path().join("report.json"),
         cwd: temp_dir.path().to_path_buf(),
         package_manager: Some("npm".to_string()),
-        timeout: 1000,
+        timeout: TEST_TIMEOUT_MS,
+        registry_max_in_flight: None,
         quiet: true,
     };
 
@@ -453,7 +467,7 @@ async fn test_ci_init_does_not_regenerate_existing_lockfile() {
     let contents_after = fs::read_to_string(&lockfile_path).expect("lockfile should still exist");
     assert_eq!(
         contents_before, contents_after,
-        "ci --init must not mutate an already existing lockfile"
+        "ci --init-lockfile must not mutate an already existing lockfile"
     );
 }
 
@@ -470,7 +484,8 @@ async fn test_install_fails_when_no_lockfile_exists() {
         format: OutputFormat::Json,
         cwd: temp_dir.path().to_path_buf(),
         package_manager: Some("npm".to_string()),
-        timeout: 1000,
+        timeout: TEST_TIMEOUT_MS,
+        registry_max_in_flight: None,
         quiet: true,
     };
 
@@ -494,7 +509,8 @@ async fn test_check_run_succeeds_with_pnpm_lockfile() {
         format: OutputFormat::Json,
         cwd: temp_dir.path().to_path_buf(),
         package_manager: None,
-        timeout: 1000,
+        timeout: TEST_TIMEOUT_MS,
+        registry_max_in_flight: None,
         quiet: true,
     };
 

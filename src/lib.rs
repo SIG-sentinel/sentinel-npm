@@ -1,8 +1,10 @@
 pub mod artifact_store_config;
 pub mod cache;
+pub(crate) mod cli_parsers;
 pub mod commands;
 pub mod constants;
 pub mod crypto;
+mod dependency_tree;
 pub mod ecosystem;
 pub mod history;
 pub mod npm;

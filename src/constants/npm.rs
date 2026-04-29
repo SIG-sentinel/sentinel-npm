@@ -3,6 +3,9 @@ pub const CI_REGISTRY_TIMEOUT_MS: u64 = 10_000;
 pub const DOWNLOAD_TARBALL_TIMEOUT_SECS: u64 = 120;
 pub const REGISTRY_MAX_RETRIES: usize = 2;
 pub const REGISTRY_RETRY_BASE_DELAY_MS: u64 = 200;
+pub const REGISTRY_RETRY_MAX_JITTER_MS: u64 = 150;
+pub const REGISTRY_MAX_IN_FLIGHT_REQUESTS: usize = 6;
+pub const REGISTRY_MAX_IN_FLIGHT_REQUESTS_ENV: &str = "SENTINEL_REGISTRY_MAX_IN_FLIGHT";
 
 pub const NPM_REGISTRY_BASE_URL: &str = "https://registry.npmjs.org";
 pub const NPM_SCOPED_SEPARATOR: &str = "%2F";

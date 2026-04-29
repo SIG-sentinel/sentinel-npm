@@ -17,6 +17,7 @@ pub struct CacheMatchParams<'a> {
 #[derive(Clone, Copy)]
 pub struct VerifierNewParams<'a> {
     pub timeout_ms: u64,
+    pub registry_max_in_flight: Option<usize>,
     pub current_working_directory: &'a Path,
     pub cache_dir: Option<&'a str>,
     pub artifact_store: ArtifactStore,

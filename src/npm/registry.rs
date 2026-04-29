@@ -1,15 +1,18 @@
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
+use std::sync::Arc;
 use std::time::Duration;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use base64::Engine as _;
 
 use crate::constants::{
     DOWNLOAD_TARBALL_TIMEOUT_SECS, NPM_ERR_PARSE_RESPONSE_TEMPLATE,
     NPM_ERR_REGISTRY_RESPONSE_TEMPLATE, NPM_ERR_TIMEOUT_DOWNLOAD_TEMPLATE, NPM_REGISTRY_BASE_URL,
-    NPM_SCOPED_SEPARATOR, NPM_USER_AGENT_PREFIX, REGISTRY_MAX_RETRIES,
-    REGISTRY_RETRY_BASE_DELAY_MS,
+    NPM_SCOPED_SEPARATOR, NPM_USER_AGENT_PREFIX, REGISTRY_MAX_IN_FLIGHT_REQUESTS,
+    REGISTRY_MAX_IN_FLIGHT_REQUESTS_ENV, REGISTRY_MAX_RETRIES, REGISTRY_RETRY_BASE_DELAY_MS,
+    REGISTRY_RETRY_MAX_JITTER_MS,
     messages::{
         HTTP_PREFIXED_REGISTRY_TEMPLATE, HTTPS_PREFIXED_REGISTRY_TEMPLATE,
         NPM_IDENTITY_PATH_TEMPLATE, REGISTRY_VERSION_URL_TEMPLATE,
@@ -19,9 +22,10 @@ use crate::constants::{
 };
 use crate::types::{
     AttestationsResponse, AuthTokenPrefixPair, BuildRegistryRequestParams, NpmProvenance,
-    NpmVersionMeta, NpmrcEntryKind, PackageRef, ParsedNpmrc, RegistryResponseClassification,
-    RegistrySettings, ResolveAuthTokenParams, ResolveRegistryBaseParams,
-    ResolveTimedResponseParams, SentinelError, SlsaV1Payload, templated_http_error,
+    NpmRegistryNewParams, NpmVersionMeta, NpmrcEntryKind, PackageRef, ParsedNpmrc,
+    RegistryResponseClassification, RegistrySettings, ResolveAuthTokenParams,
+    ResolveRegistryBaseParams, ResolveTimedResponseParams, SentinelError, SlsaV1Payload,
+    templated_http_error,
 };
 
 pub(super) use crate::types::NpmRegistry;
@@ -37,21 +41,36 @@ const NPMRC_DEFAULT_REGISTRY_KEY: &str = "registry";
 const NPMRC_SCOPED_REGISTRY_SUFFIX: &str = ":registry";
 const NPMRC_AUTH_TOKEN_SUFFIX: &str = ":_authToken";
 const NPMRC_AUTH_TOKEN_PREFIX: &str = "//";
+const REGISTRY_REQUEST_GATE_CLOSED_MSG: &str = "registry request gate closed";
+const HEX_BYTE_PAIR_LEN: usize = 2;
+const HEX_RADIX: u32 = 16;
+const HEX_HIGH_NIBBLE_SHIFT_BITS: u32 = 4;
+const SCOPED_PACKAGE_PREFIX: char = '@';
+const PACKAGE_SCOPE_SEPARATOR: char = '/';
+const RETRY_BACKOFF_MULTIPLIER_BASE: u64 = 2;
+const JITTER_INCLUSIVE_UPPER_BOUND_OFFSET: u64 = 1;
+const POSITIVE_USIZE_MIN: usize = 0;
+const LINE_SEPARATOR: char = '\n';
+const NPMRC_HASH_COMMENT_PREFIX: char = '#';
+const NPMRC_SEMICOLON_COMMENT_PREFIX: char = ';';
+const NPMRC_ENTRY_SEPARATOR: char = '=';
+const DOUBLE_QUOTE_CHAR: char = '"';
+const SINGLE_QUOTE_CHAR: char = '\'';
 
 fn hex_to_bytes(hex: &str) -> Option<Vec<u8>> {
     let hex_bytes = hex.as_bytes();
-    let is_even_length = hex_bytes.len() % 2 == 0;
+    let is_even_length = hex_bytes.len() % HEX_BYTE_PAIR_LEN == 0;
 
     if !is_even_length {
         return None;
     }
 
     hex_bytes
-        .chunks_exact(2)
+        .chunks_exact(HEX_BYTE_PAIR_LEN)
         .map(|pair| {
-            let high_nibble = char::from(pair[0]).to_digit(16)?;
-            let low_nibble = char::from(pair[1]).to_digit(16)?;
-            let combined_byte = (high_nibble << 4) | low_nibble;
+            let high_nibble = char::from(pair[0]).to_digit(HEX_RADIX)?;
+            let low_nibble = char::from(pair[1]).to_digit(HEX_RADIX)?;
+            let combined_byte = (high_nibble << HEX_HIGH_NIBBLE_SHIFT_BITS) | low_nibble;
 
             u8::try_from(combined_byte).ok()
         })
@@ -59,7 +78,7 @@ fn hex_to_bytes(hex: &str) -> Option<Vec<u8>> {
 }
 
 fn classify_npmrc_entry_key(parsed_key: &str) -> NpmrcEntryKind {
-    let is_scoped_registry_key = parsed_key.starts_with('@');
+    let is_scoped_registry_key = parsed_key.starts_with(SCOPED_PACKAGE_PREFIX);
     let has_scoped_registry_suffix = parsed_key.ends_with(NPMRC_SCOPED_REGISTRY_SUFFIX);
     let is_scoped_registry_config = is_scoped_registry_key && has_scoped_registry_suffix;
     let has_auth_token_prefix = parsed_key.starts_with(NPMRC_AUTH_TOKEN_PREFIX);
@@ -143,7 +162,7 @@ async fn resolve_timed_response(
 
 fn parse_scope_from_registry_key(parsed_key: &str) -> String {
     parsed_key
-        .trim_start_matches('@')
+        .trim_start_matches(SCOPED_PACKAGE_PREFIX)
         .trim_end_matches(NPMRC_SCOPED_REGISTRY_SUFFIX)
         .to_string()
 }
@@ -158,6 +177,7 @@ fn expand_auth_token_prefixes(parsed_key: &str) -> AuthTokenPrefixPair {
         HTTP_PREFIXED_REGISTRY_TEMPLATE,
         &[prefix_without_token.to_string()],
     );
+
     AuthTokenPrefixPair {
         https_prefix: normalize_registry_base(&secure_registry_prefix),
         http_prefix: normalize_registry_base(&insecure_registry_prefix),
@@ -181,17 +201,25 @@ fn resolve_provenance_identity(slsa_payload: &SlsaV1Payload) -> Option<String> {
 }
 
 impl NpmRegistry {
-    pub fn new(timeout_ms: u64, current_working_directory: &Path) -> Result<Self, SentinelError> {
+    pub fn new(params: NpmRegistryNewParams<'_>) -> Result<Self, SentinelError> {
+        let NpmRegistryNewParams {
+            timeout_ms,
+            registry_max_in_flight,
+            current_working_directory,
+        } = params;
+
         let client = build_registry_client(timeout_ms)?;
         let RegistrySettings {
             default_registry_base,
             scoped_registry_bases,
             auth_token_prefixes,
         } = resolve_registry_settings(current_working_directory);
+        let max_in_flight_requests = resolve_max_in_flight_requests(registry_max_in_flight);
 
         let registry = Self {
             client,
             timeout: Duration::from_millis(timeout_ms),
+            request_gate: Arc::new(tokio::sync::Semaphore::new(max_in_flight_requests)),
             default_registry_base,
             scoped_registry_bases,
             auth_token_prefixes,
@@ -225,8 +253,15 @@ impl NpmRegistry {
                 auth_token_prefixes: &self.auth_token_prefixes,
             };
             let request_builder = build_registry_request(build_registry_request_params);
+            let permit =
+                self.request_gate.acquire().await.map_err(|_| {
+                    SentinelError::Http(REGISTRY_REQUEST_GATE_CLOSED_MSG.to_string())
+                })?;
 
             let response_result = tokio::time::timeout(self.timeout, request_builder.send()).await;
+
+            drop(permit);
+
             let timeout_error = SentinelError::RegistryTimeout {
                 package: package_ref.name.clone(),
                 version: package_ref.version.clone(),
@@ -306,7 +341,13 @@ impl NpmRegistry {
     }
 
     async fn fetch_provenance_from_attestations(&self, url: &str) -> Option<NpmProvenance> {
-        let response = self.client.get(url).send().await.ok()?;
+        let request_builder = self.client.get(url);
+        let permit = self.request_gate.acquire().await.ok()?;
+        let response_result = tokio::time::timeout(self.timeout, request_builder.send()).await;
+
+        drop(permit);
+
+        let response = response_result.ok()?.ok()?;
         let is_success = response.status().is_success();
 
         if !is_success {
@@ -351,12 +392,18 @@ impl NpmRegistry {
                 auth_token_prefixes: &self.auth_token_prefixes,
             };
             let request_builder = build_registry_request(build_registry_request_params);
+            let permit =
+                self.request_gate.acquire().await.map_err(|_| {
+                    SentinelError::Http(REGISTRY_REQUEST_GATE_CLOSED_MSG.to_string())
+                })?;
 
             let response_result = tokio::time::timeout(
                 Duration::from_secs(DOWNLOAD_TARBALL_TIMEOUT_SECS),
                 request_builder.send(),
             )
             .await;
+
+            drop(permit);
 
             let timeout_error = timeout_download_error(url);
             let resolve_timed_response_params = ResolveTimedResponseParams {
@@ -410,18 +457,40 @@ fn is_retryable_status(status_code: u16) -> bool {
 
 async fn sleep_before_retry(attempt: usize) {
     let retry_attempt = u32::try_from(attempt).unwrap_or(u32::MAX);
-    let multiplier = 2u64.saturating_pow(retry_attempt);
-    let delay_ms = REGISTRY_RETRY_BASE_DELAY_MS.saturating_mul(multiplier);
+    let multiplier = RETRY_BACKOFF_MULTIPLIER_BASE.saturating_pow(retry_attempt);
+    let base_delay_ms = REGISTRY_RETRY_BASE_DELAY_MS.saturating_mul(multiplier);
+    let jitter_ms = jitter_ms();
+    let delay_ms = base_delay_ms.saturating_add(jitter_ms);
 
     tokio::time::sleep(Duration::from_millis(delay_ms)).await;
 }
 
+fn jitter_ms() -> u64 {
+    let now = SystemTime::now().duration_since(UNIX_EPOCH);
+    let nanos = now.map_or(0, |duration| u64::from(duration.subsec_nanos()));
+
+    nanos % (REGISTRY_RETRY_MAX_JITTER_MS.saturating_add(JITTER_INCLUSIVE_UPPER_BOUND_OFFSET))
+}
+
+fn resolve_max_in_flight_requests(registry_max_in_flight: Option<usize>) -> usize {
+    if let Some(registry_max_in_flight) = registry_max_in_flight {
+        return registry_max_in_flight;
+    }
+
+    let parsed_value = std::env::var(REGISTRY_MAX_IN_FLIGHT_REQUESTS_ENV)
+        .ok()
+        .and_then(|raw_value| raw_value.parse::<usize>().ok())
+        .filter(|value| *value > POSITIVE_USIZE_MIN);
+
+    parsed_value.unwrap_or(REGISTRY_MAX_IN_FLIGHT_REQUESTS)
+}
+
 fn encode_package_name(name: &str) -> String {
-    let is_scoped_package = name.starts_with('@');
+    let is_scoped_package = name.starts_with(SCOPED_PACKAGE_PREFIX);
     let mut encoded_package_name = name.to_string();
 
     if is_scoped_package {
-        encoded_package_name = name.replacen('/', NPM_SCOPED_SEPARATOR, 1);
+        encoded_package_name = name.replacen(PACKAGE_SCOPE_SEPARATOR, NPM_SCOPED_SEPARATOR, 1);
     }
 
     encoded_package_name
@@ -483,7 +552,7 @@ fn read_combined_npmrc(current_working_directory: &Path) -> String {
     for path in files {
         if let Ok(content) = fs::read_to_string(path) {
             combined.push_str(&content);
-            combined.push('\n');
+            combined.push(LINE_SEPARATOR);
         }
     }
 
@@ -498,20 +567,23 @@ fn parse_npmrc_content(content: &str) -> ParsedNpmrc {
     for raw_line in content.lines() {
         let trimmed_line = raw_line.trim();
         let is_empty_line = trimmed_line.is_empty();
-        let is_hash_comment = trimmed_line.starts_with('#');
-        let is_semicolon_comment = trimmed_line.starts_with(';');
+        let is_hash_comment = trimmed_line.starts_with(NPMRC_HASH_COMMENT_PREFIX);
+        let is_semicolon_comment = trimmed_line.starts_with(NPMRC_SEMICOLON_COMMENT_PREFIX);
         let should_skip_line = is_empty_line || is_hash_comment || is_semicolon_comment;
 
         if should_skip_line {
             continue;
         }
 
-        let Some((key, value)) = trimmed_line.split_once('=') else {
+        let Some((key, value)) = trimmed_line.split_once(NPMRC_ENTRY_SEPARATOR) else {
             continue;
         };
 
         let parsed_key = key.trim();
-        let parsed_value = value.trim().trim_matches('"').trim_matches('\'');
+        let parsed_value = value
+            .trim()
+            .trim_matches(DOUBLE_QUOTE_CHAR)
+            .trim_matches(SINGLE_QUOTE_CHAR);
 
         match classify_npmrc_entry_key(parsed_key) {
             NpmrcEntryKind::DefaultRegistry => {
@@ -543,7 +615,7 @@ fn parse_npmrc_content(content: &str) -> ParsedNpmrc {
 }
 
 fn normalize_registry_base(value: &str) -> String {
-    value.trim_end_matches('/').to_string()
+    value.trim_end_matches(PACKAGE_SCOPE_SEPARATOR).to_string()
 }
 
 fn resolve_registry_base_for_package(params: ResolveRegistryBaseParams<'_>) -> String {
@@ -553,8 +625,8 @@ fn resolve_registry_base_for_package(params: ResolveRegistryBaseParams<'_>) -> S
         scoped_registry_bases,
     } = params;
     let maybe_scope = package_name
-        .strip_prefix('@')
-        .and_then(|name| name.split('/').next());
+        .strip_prefix(SCOPED_PACKAGE_PREFIX)
+        .and_then(|name| name.split(PACKAGE_SCOPE_SEPARATOR).next());
 
     let Some(scope) = maybe_scope else {
         return default_registry_base.to_string();

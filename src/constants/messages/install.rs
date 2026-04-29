@@ -12,10 +12,10 @@ pub const INSTALL_ERR_LOCKFILE_GENERATE_FAILED: &str = "Failed to generate lockf
 pub const INSTALL_MSG_OFFLINE_STRICT_FAIL: &str =
     "sentinel: offline mode cannot validate package integrity against npm registry in strict mode";
 pub const INSTALL_MSG_NPM_FAILED_TEMPLATE: &str = "npm install failed with code {}";
-pub const INSTALL_ERR_NO_LOCKFILE_FOR_INSTALL: &str = "sentinel install requires a lockfile, but none was found.\n\nPrefer Sentinel-first setup:\n\n  sentinel ci --init\n\nThen re-run:\n\n  sentinel install <package>@<version>\n\nManual fallback:\n\n  npm install               →  package-lock.json\n  yarn                      →  yarn.lock\n  pnpm install              →  pnpm-lock.yaml";
+pub const INSTALL_ERR_NO_LOCKFILE_FOR_INSTALL: &str = "sentinel install requires a lockfile, but none was found.\n\nPrefer Sentinel-first setup:\n\n  sentinel ci --init-lockfile\n\nThen re-run:\n\n  sentinel install <package>@<version>\n\nManual fallback:\n\n  npm install               →  package-lock.json\n  yarn                      →  yarn.lock\n  pnpm install              →  pnpm-lock.yaml";
 pub const INSTALL_ERR_LOCKFILE_INIT_MISSING_AFTER_SUCCESS: &str =
     "sentinel: lockfile initialization finished but no lockfile was created";
-pub const INSTALL_ERR_NO_LOCKFILE_FOR_CI: &str = "sentinel ci requires a lockfile, but none was found.\n\nPrefer Sentinel-first setup:\n\n  sentinel ci --init\n\nManual fallback:\n\n  npm install --package-lock-only   →  package-lock.json\n  yarn install --no-immutable       →  yarn.lock\n  pnpm install --lockfile-only      →  pnpm-lock.yaml\n\nThen re-run sentinel ci.\n\nNote: --init creates/updates lockfile before verification.";
+pub const INSTALL_ERR_NO_LOCKFILE_FOR_CI: &str = "sentinel ci requires a lockfile, but none was found.\n\nPrefer Sentinel-first setup:\n\n  sentinel ci --init-lockfile\n\nManual fallback:\n\n  npm install --package-lock-only   →  package-lock.json\n  yarn install --no-immutable       →  yarn.lock\n  pnpm install --lockfile-only      →  pnpm-lock.yaml\n\nThen re-run sentinel ci.\n\nNote: --init-lockfile creates/updates lockfile before verification.";
 
 pub const INSTALL_ERR_FAILED_READ_DIRECTORY: &str = "failed to read directory";
 pub const INSTALL_ERR_FAILED_READ_DIRECTORY_ENTRY: &str = "failed to read directory entry";
@@ -33,6 +33,15 @@ pub const INSTALL_ERR_FAILED_FETCH_REGISTRY_METADATA: &str = "failed to fetch re
 pub const INSTALL_ERR_FAILED_DOWNLOAD_REGISTRY_TARBALL: &str =
     "failed to download registry tarball";
 pub const INSTALL_ERR_FAILED_READ_TARBALL_RESPONSE: &str = "failed to read tarball response";
+
+pub const INSTALL_ERR_FAILED_READ_REGISTRY_TARBALL_ENTRIES_POST_VERIFY: &str =
+    "failed to read registry tarball entries for post-verify";
+pub const INSTALL_ERR_FAILED_PARSE_REGISTRY_TARBALL_ENTRY_POST_VERIFY: &str =
+    "failed to parse registry tarball entry for post-verify";
+pub const INSTALL_ERR_FAILED_READ_REGISTRY_TARBALL_PATH_POST_VERIFY: &str =
+    "failed to read registry tarball path for post-verify";
+pub const INSTALL_ERR_FAILED_READ_REGISTRY_TARBALL_FILE_CONTENT_POST_VERIFY: &str =
+    "failed to read registry tarball file content for post-verify";
 
 pub const INSTALL_ERR_FAILED_BUILD_ASYNC_RUNTIME: &str =
     "failed to build async runtime for post-verify";

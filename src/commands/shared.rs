@@ -48,6 +48,7 @@ pub(super) fn load_lockfile_entries(
 pub(super) fn load_command_state(
     current_working_directory: &Path,
     timeout_ms: u64,
+    registry_max_in_flight: Option<usize>,
 ) -> Result<SharedCommandState, SharedCommandStateError> {
     let dependency_tree = load_dependency_tree(current_working_directory)
         .map_err(SharedCommandStateError::DependencyTree)?;
@@ -59,6 +60,7 @@ pub(super) fn load_command_state(
 
     let verifier_new_params = VerifierNewParams {
         timeout_ms,
+        registry_max_in_flight,
         current_working_directory,
         cache_dir: None,
         artifact_store,

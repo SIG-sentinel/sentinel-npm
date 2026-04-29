@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 
 use crate::types::ArtifactStore;
@@ -15,6 +16,7 @@ pub struct Verifier {
 pub struct NpmRegistry {
     pub(crate) client: reqwest::Client,
     pub(crate) timeout: Duration,
+    pub(crate) request_gate: Arc<tokio::sync::Semaphore>,
     pub(crate) default_registry_base: String,
     pub(crate) scoped_registry_bases: HashMap<String, String>,
     pub(crate) auth_token_prefixes: Vec<(String, String)>,

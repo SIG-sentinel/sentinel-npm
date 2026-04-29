@@ -7,8 +7,8 @@ use crate::cache::LocalCache;
 use crate::constants::{INTEGRITY_PREFIX_SHA512, render_template};
 use crate::npm::NpmRegistry;
 use crate::types::{
-    CacheMatchParams, CreateUnverifiableParams, SentinelError, UnverifiableTemplateParams, Verdict,
-    VerifierNewParams, VerifyResult,
+    CacheMatchParams, CreateUnverifiableParams, NpmRegistryNewParams, SentinelError,
+    UnverifiableTemplateParams, Verdict, VerifierNewParams, VerifyResult,
 };
 
 pub use crate::types::Verifier;
@@ -104,14 +104,21 @@ impl Verifier {
     pub fn new(params: VerifierNewParams<'_>) -> Result<Self, SentinelError> {
         let VerifierNewParams {
             timeout_ms,
+            registry_max_in_flight,
             current_working_directory,
             cache_dir,
             artifact_store,
             max_memory_bytes,
         } = params;
 
+        let npm_registry_new_params = NpmRegistryNewParams {
+            timeout_ms,
+            registry_max_in_flight,
+            current_working_directory,
+        };
+
         Ok(Self {
-            registry: NpmRegistry::new(timeout_ms, current_working_directory)?,
+            registry: NpmRegistry::new(npm_registry_new_params)?,
             cache: LocalCache::open(cache_dir)?,
             artifact_store,
             memory_budget: memory_budget::MemoryBudgetTracker::new(max_memory_bytes),

@@ -341,6 +341,14 @@ pub struct ProcessDirectoryEntryParams<'a> {
     pub pending_paths: &'a mut Vec<PathBuf>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DirectoryEntryKind {
+    SkipSymlink,
+    Directory,
+    File,
+    Other,
+}
+
 pub struct ProcessInstalledPackageIndexEntryParams<'a> {
     pub path: &'a Path,
     pub entry_result: Result<std::fs::DirEntry, std::io::Error>,
@@ -354,27 +362,82 @@ pub struct FindContentMismatchPostVerifyPackagesParams<'a> {
     pub packages: &'a [PackageRef],
     pub verifier: &'a Verifier,
     pub cached_fingerprints: &'a HashMap<String, String>,
+    pub verified_source_urls: &'a HashMap<String, String>,
+}
+
+#[derive(Clone, Copy)]
+pub struct ComputeRegistryPackageFingerprintFromSourceUrlParams<'a> {
+    pub verifier: &'a Verifier,
+    pub package_ref: &'a PackageRef,
+    pub source_url: &'a str,
+}
+
+#[derive(Clone, Copy)]
+pub struct ComputePostVerifyRegistryFingerprintParams<'a> {
+    pub verifier: &'a Verifier,
+    pub package_ref: &'a PackageRef,
+    pub verified_source_url: Option<&'a str>,
+}
+
+#[derive(Clone, Copy)]
+pub struct ResolveInitialRegistryFingerprintParams<'a> {
+    pub verifier: &'a Verifier,
+    pub package_ref: &'a PackageRef,
+    pub cached_registry_fingerprint: Option<&'a String>,
+    pub verified_source_url: Option<&'a str>,
+}
+
+pub enum InitialRegistryFingerprintStrategy<'a> {
+    UseCached(String),
+    Compute(Option<&'a str>),
+}
+
+pub enum FreshFingerprintPolicy {
+    ReturnImmediately,
+    RevalidateWithFreshFingerprint,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CandidateMatchScope {
+    DirectOnly,
+    IncludeTransitive,
+}
+
+#[derive(Clone, Copy)]
+pub struct RegistryTarballMatchesInstalledContentParams<'a> {
+    pub verifier: &'a Verifier,
+    pub package_ref: &'a PackageRef,
+    pub installed_root: &'a Path,
 }
 
 #[derive(Clone, Copy)]
 pub struct CheckContentFingerprintMismatchesParams<'a> {
     pub current_working_directory: &'a Path,
     pub timeout_ms: u64,
+    pub registry_max_in_flight: Option<usize>,
     pub installed_package_index: &'a HashMap<String, PathBuf>,
     pub packages: &'a [PackageRef],
     pub verify_results: &'a [VerifyResult],
     pub command_name: &'a str,
 }
 
-#[derive(Clone, Copy)]
 pub struct RunPostVerifyForPackagesParams<'a> {
     pub current_working_directory: &'a Path,
     pub timeout_ms: u64,
+    pub registry_max_in_flight: Option<usize>,
     pub quiet: bool,
     pub is_text_output: bool,
     pub command_name: &'a str,
     pub packages: &'a [PackageRef],
     pub verify_results: &'a [VerifyResult],
+}
+
+pub struct EvaluatePostVerifyPackageMismatchParams<'a> {
+    pub installed_package_index: &'a HashMap<String, PathBuf>,
+    pub verifier: &'a Verifier,
+    pub cached_fingerprints: &'a HashMap<String, String>,
+    pub verified_source_urls: &'a HashMap<String, String>,
+    pub package_ref: PackageRef,
 }
 
 #[derive(Clone, Copy)]

@@ -70,30 +70,36 @@ fn make_verifier(timeout_ms: u64, temp_dir: &std::path::Path) -> Verifier {
         .to_str()
         .expect("tempdir path should be valid utf-8");
 
-    Verifier::new(VerifierNewParams {
+    let verifier_new_params = VerifierNewParams {
         timeout_ms,
+        registry_max_in_flight: None,
         current_working_directory: temp_dir,
         cache_dir: Some(cache_dir),
         artifact_store: ArtifactStore::Auto,
         max_memory_bytes: MAX_MEMORY_BYTES,
-    })
-    .expect("verifier should be created")
+    };
+
+    Verifier::new(verifier_new_params).expect("verifier should be created")
 }
 
 #[test]
 fn test_cache_matches_lockfile_when_integrity_is_same() {
-    assert!(cache_matches_lockfile(CacheMatchParams {
+    let cache_match_params = CacheMatchParams {
         entry: &pkg_lockfile_entry(INTEGRITY_SHA512_A),
         cached_result: &clean_cached_result(INTEGRITY_SHA512_A),
-    }));
+    };
+
+    assert!(cache_matches_lockfile(cache_match_params));
 }
 
 #[test]
 fn test_cache_matches_lockfile_when_integrity_drifted() {
-    assert!(!cache_matches_lockfile(CacheMatchParams {
+    let cache_match_params = CacheMatchParams {
         entry: &pkg_lockfile_entry(INTEGRITY_SHA512_B),
         cached_result: &clean_cached_result(INTEGRITY_SHA512_A),
-    }));
+    };
+
+    assert!(!cache_matches_lockfile(cache_match_params));
 }
 
 #[test]

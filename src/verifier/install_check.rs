@@ -322,6 +322,38 @@ fn normalize_tarball_relative_path(path: &str) -> Option<String> {
     Some(relative_path.to_string())
 }
 
+fn detect_common_tarball_root(raw_paths: &[String]) -> Option<String> {
+    let first_path = raw_paths.first()?;
+    let mut first_segments = first_path.split('/');
+    let first_root = first_segments.next()?;
+    let has_first_subpath = first_segments.next().is_some();
+
+    if !has_first_subpath {
+        return None;
+    }
+
+    let all_share_same_root = raw_paths.iter().all(|path| {
+        let mut segments = path.split('/');
+        let root = segments.next();
+        let has_subpath = segments.next().is_some();
+
+        root == Some(first_root) && has_subpath
+    });
+
+    all_share_same_root.then(|| first_root.to_string())
+}
+
+fn normalize_tarball_entry_path(path: &str, common_root: Option<&str>) -> Option<String> {
+    let common_root_path = common_root.map(|root| format!("{root}/"));
+
+    let relative_path = match common_root_path.as_deref() {
+        Some(root_prefix) => path.strip_prefix(root_prefix).unwrap_or(path),
+        None => path.strip_prefix(TARBALL_PREFIX_DIR).unwrap_or(path),
+    };
+
+    normalize_tarball_relative_path(relative_path)
+}
+
 fn collect_tarball_file_hashes(
     params: &CollectTarballHashesParams<'_>,
 ) -> InstallCheckResult<Vec<(String, Vec<u8>)>> {
@@ -334,7 +366,7 @@ fn collect_tarball_file_hashes(
 
     let decoder = flate2::read::GzDecoder::new(tarball_bytes);
     let mut archive = tar::Archive::new(decoder);
-    let mut files: Vec<(String, Vec<u8>)> = Vec::new();
+    let mut raw_files: Vec<(String, Vec<u8>)> = Vec::new();
 
     let mut entries = archive.entries().map_err(|error| {
         let error_description = error.to_string();
@@ -376,11 +408,7 @@ fn collect_tarball_file_hashes(
 
         let path_text = entry_path.to_string_lossy().replace('\\', "/");
 
-        let Some(raw_relative_path) = path_text.strip_prefix(TARBALL_PREFIX_DIR) else {
-            continue;
-        };
-
-        let Some(relative_path) = normalize_tarball_relative_path(raw_relative_path) else {
+        let Some(normalized_raw_path) = normalize_tarball_relative_path(&path_text) else {
             continue;
         };
 
@@ -399,8 +427,18 @@ fn collect_tarball_file_hashes(
 
         let entry_hash = Sha256::digest(&bytes).to_vec();
 
-        files.push((relative_path, entry_hash));
+        raw_files.push((normalized_raw_path, entry_hash));
     }
+
+    let raw_paths: Vec<String> = raw_files.iter().map(|(path, _)| path.clone()).collect();
+    let common_root = detect_common_tarball_root(&raw_paths);
+    let files: Vec<(String, Vec<u8>)> = raw_files
+        .into_iter()
+        .filter_map(|(path, hash)| {
+            let relative_path = normalize_tarball_entry_path(&path, common_root.as_deref())?;
+            Some((relative_path, hash))
+        })
+        .collect();
 
     Ok(files)
 }

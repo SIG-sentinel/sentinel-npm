@@ -24,15 +24,14 @@ use crate::utils::{
 };
 use crate::verifier::compute_tarball_fingerprint_bytes;
 use std::process::ExitCode;
-use std::sync::{Mutex, OnceLock};
 
-fn env_test_lock() -> std::sync::MutexGuard<'static, ()> {
-    static TEST_MUTEX: OnceLock<Mutex<()>> = OnceLock::new();
-    TEST_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("env test mutex should lock")
-}
+#[path = "utils/tests/mod.rs"]
+mod utils_tests;
+
+use utils_tests::fixtures::{build_clean_verify_result, create_installed_package_fixture};
+use utils_tests::mocks::{env_test_lock, write_npm_ci_post_verify_stub};
+
+const TEST_TIMEOUT_MS: u64 = 1000;
 
 #[test]
 fn test_ensure_lockfile_exists_returns_true_when_file_exists() {
@@ -43,9 +42,10 @@ fn test_ensure_lockfile_exists_returns_true_when_file_exists() {
         .expect("package.json should be written");
     std::fs::write(&lockfile, "{}").expect("lockfile should be written");
 
-    let ok = ensure_lockfile_exists(EnsureLockfileExistsForInstallParams {
+    let ensure_lockfile_exists_for_install_params = EnsureLockfileExistsForInstallParams {
         current_working_directory: temp_dir.path(),
-    });
+    };
+    let ok = ensure_lockfile_exists(ensure_lockfile_exists_for_install_params);
     assert!(ok);
 }
 
@@ -208,11 +208,12 @@ fn test_collect_install_packages_includes_target_and_transitives() {
         direct_parent: Some("a@1.0.0".to_string()),
     });
 
-    let packages_to_verify = collect_install_packages_to_verify(CollectInstallPackagesParams {
+    let collect_install_packages_params = CollectInstallPackagesParams {
         dependency_tree: &dependency_tree,
         package_reference: &PackageRef::new("a", "1.0.0"),
-    })
-    .expect("target package should be present");
+    };
+    let packages_to_verify = collect_install_packages_to_verify(collect_install_packages_params)
+        .expect("target package should be present");
 
     let packages: Vec<String> = packages_to_verify
         .into_iter()
@@ -335,27 +336,82 @@ fn test_compute_tarball_fingerprint_matches_installed_directory_fingerprint() {
 }
 
 #[test]
+fn test_compute_tarball_fingerprint_supports_non_package_root_directory() {
+    use flate2::Compression;
+    use flate2::write::GzEncoder;
+    use tar::Builder;
+
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let package_root = temp_dir.path().join("installed");
+    std::fs::create_dir_all(package_root.join("lib")).expect("package dirs should be created");
+    std::fs::write(
+        package_root.join("package.json"),
+        r#"{"name":"@types/express","version":"4.17.25"}"#,
+    )
+    .expect("package.json should be written");
+    std::fs::write(package_root.join("lib").join("index.d.ts"), "export {}\n")
+        .expect("lib/index.d.ts should be written");
+
+    let expected_fingerprint =
+        compute_directory_fingerprint(&package_root).expect("fingerprint should be computed");
+
+    let tarball_path = temp_dir.path().join("types-express-4.17.25.tgz");
+    let tarball_file = std::fs::File::create(&tarball_path).expect("tarball should be created");
+    let encoder = GzEncoder::new(tarball_file, Compression::default());
+    let mut builder = Builder::new(encoder);
+    builder
+        .append_path_with_name(
+            package_root.join("package.json"),
+            "express v4.17/package.json",
+        )
+        .expect("package.json should be added to tarball");
+    builder
+        .append_path_with_name(
+            package_root.join("lib").join("index.d.ts"),
+            "express v4.17/lib/index.d.ts",
+        )
+        .expect("index.d.ts should be added to tarball");
+    builder.finish().expect("tar entries should be finalized");
+    let encoder = builder
+        .into_inner()
+        .expect("tar builder should return encoder");
+    encoder.finish().expect("gzip stream should be finalized");
+
+    let tarball_bytes = std::fs::read(&tarball_path).expect("tarball bytes should be readable");
+    let package_ref = PackageRef::new("@types/express", "4.17.25");
+    let tarball_fingerprint = compute_tarball_fingerprint_bytes(&tarball_bytes, &package_ref)
+        .expect("tarball fingerprint should be computed");
+
+    assert_eq!(
+        expected_fingerprint, tarball_fingerprint,
+        "tarball and installed package fingerprints must match even with non-package root"
+    );
+}
+
+#[test]
 fn test_should_print_report_suppresses_quiet_text_output() {
-    let should_print = should_print_report(ShouldPrintReportParams {
+    let should_print_report_params = ShouldPrintReportParams {
         output_format: &OutputFormat::Text,
         quiet: true,
-    });
+    };
+    let should_print = should_print_report(should_print_report_params);
 
     assert!(!should_print);
 }
 
 #[test]
 fn test_should_print_report_keeps_quiet_json_output() {
-    let should_print = should_print_report(ShouldPrintReportParams {
+    let should_print_report_params = ShouldPrintReportParams {
         output_format: &OutputFormat::Json,
         quiet: true,
-    });
+    };
+    let should_print = should_print_report(should_print_report_params);
 
     assert!(should_print);
 }
 
-#[test]
-fn test_finalize_ci_run_aborts_when_lockfile_hash_changes_before_install() {
+#[tokio::test]
+async fn test_finalize_ci_run_aborts_when_lockfile_hash_changes_before_install() {
     let temp_dir = tempfile::tempdir().expect("tempdir should be created");
     std::fs::write(temp_dir.path().join("package-lock.json"), "{}")
         .expect("lockfile should be written");
@@ -371,24 +427,26 @@ fn test_finalize_ci_run_aborts_when_lockfile_hash_changes_before_install() {
         report: temp_dir.path().join("report.json"),
         cwd: temp_dir.path().to_path_buf(),
         package_manager: None,
-        timeout: 1000,
+        timeout: TEST_TIMEOUT_MS,
+        registry_max_in_flight: None,
         quiet: true,
     };
 
     let report = Report::from_results(RunMode::Ci, vec![], vec![]);
     let previous_hash = Some("different-hash-before-verify".to_string());
 
-    let exit = finalize_ci_run(FinalizeCiRunParams {
+    let finalize_ci_run_params = FinalizeCiRunParams {
         args: &args,
         report: &report,
         lock_hash_before_verify: &previous_hash,
-    });
+    };
+    let exit = finalize_ci_run(finalize_ci_run_params).await;
 
     assert_eq!(exit, ExitCode::FAILURE);
 }
 
-#[test]
-fn test_finalize_install_run_aborts_when_lockfile_hash_changes_before_install() {
+#[tokio::test]
+async fn test_finalize_install_run_aborts_when_lockfile_hash_changes_before_install() {
     let temp_dir = tempfile::tempdir().expect("tempdir should be created");
     std::fs::write(temp_dir.path().join("package-lock.json"), "{}")
         .expect("lockfile should be written");
@@ -401,7 +459,8 @@ fn test_finalize_install_run_aborts_when_lockfile_hash_changes_before_install() 
         format: OutputFormat::Json,
         cwd: temp_dir.path().to_path_buf(),
         package_manager: None,
-        timeout: 1000,
+        timeout: TEST_TIMEOUT_MS,
+        registry_max_in_flight: None,
         quiet: true,
     };
 
@@ -409,16 +468,303 @@ fn test_finalize_install_run_aborts_when_lockfile_hash_changes_before_install() 
     let package_ref = PackageRef::new("lodash", "4.17.21");
     let previous_hash = Some("different-hash-before-verify".to_string());
 
-    let outcome = finalize_install_run(FinalizeInstallRunParams {
+    let finalize_install_run_params = FinalizeInstallRunParams {
         args: &args,
         package_ref: &package_ref,
         report: &report,
         lock_hash_before_verify: &previous_hash,
         prevalidated_tarball: None,
-    });
+    };
+    let outcome = finalize_install_run(finalize_install_run_params).await;
 
     assert_eq!(outcome.exit_code, ExitCode::FAILURE);
     assert!(outcome.should_restore_snapshot);
+}
+
+#[tokio::test]
+async fn test_finalize_ci_run_post_verify_writes_history_without_runtime_panic() {
+    let _guard = env_test_lock();
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let cwd = temp_dir.path();
+
+    std::fs::write(cwd.join("package-lock.json"), "{}").expect("lockfile should be written");
+    std::fs::write(
+        cwd.join("package.json"),
+        r#"{"name":"demo","version":"1.0.0"}"#,
+    )
+    .expect("package.json should be written");
+
+    let package_ref = PackageRef::new("lodash", "4.17.21");
+    let tarball_fingerprint =
+        create_installed_package_fixture(cwd, &package_ref, compute_directory_fingerprint);
+    let bin_dir = write_npm_ci_post_verify_stub(cwd, &package_ref);
+    let report = Report::from_results(
+        RunMode::Ci,
+        vec![build_clean_verify_result(&package_ref, tarball_fingerprint)],
+        vec![],
+    );
+    let args = CiArgs {
+        omit_dev: false,
+        omit_optional: false,
+        allow_scripts: false,
+        dry_run: false,
+        post_verify: true,
+        init_lockfile: false,
+        format: OutputFormat::Json,
+        report: cwd.join("report.json"),
+        cwd: cwd.to_path_buf(),
+        package_manager: Some("npm".to_string()),
+        timeout: TEST_TIMEOUT_MS,
+        registry_max_in_flight: None,
+        quiet: true,
+    };
+    let lock_hash_before_verify = lockfile_sha256(cwd);
+    let previous_path = std::env::var("PATH").unwrap_or_default();
+    let patched_path = format!("{}:{}", bin_dir.display(), previous_path);
+    let home_dir = cwd.join("home");
+    std::fs::create_dir_all(&home_dir).expect("home dir should be created");
+
+    let exit = temp_env::async_with_vars(
+        [
+            ("PATH", Some(std::ffi::OsString::from(&patched_path))),
+            ("HOME", Some(home_dir.as_os_str().to_os_string())),
+        ],
+        async {
+            let finalize_ci_run_params = FinalizeCiRunParams {
+                args: &args,
+                report: &report,
+                lock_hash_before_verify: &lock_hash_before_verify,
+            };
+            finalize_ci_run(finalize_ci_run_params).await
+        },
+    )
+    .await;
+
+    assert_eq!(exit, ExitCode::SUCCESS);
+
+    let ledger_path = cwd.join(".sentinel").join("install-history.ndjson");
+    assert!(
+        ledger_path.exists(),
+        "ci success should append history ledger"
+    );
+
+    let ledger_contents = std::fs::read_to_string(&ledger_path).expect("ledger should be readable");
+    assert!(ledger_contents.contains("\"command\":\"ci\""));
+    assert!(ledger_contents.contains("\"name\":\"lodash\""));
+}
+
+#[tokio::test]
+async fn test_finalize_ci_run_post_verify_failure_skips_history_write() {
+    let _guard = env_test_lock();
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let cwd = temp_dir.path();
+
+    std::fs::write(cwd.join("package-lock.json"), "{}").expect("lockfile should be written");
+    std::fs::write(
+        cwd.join("package.json"),
+        r#"{"name":"demo","version":"1.0.0"}"#,
+    )
+    .expect("package.json should be written");
+
+    let package_ref = PackageRef::new("lodash", "4.17.21");
+    let _ = create_installed_package_fixture(cwd, &package_ref, compute_directory_fingerprint);
+    let bin_dir = write_npm_ci_post_verify_stub(cwd, &package_ref);
+    let report = Report::from_results(
+        RunMode::Ci,
+        vec![build_clean_verify_result(
+            &package_ref,
+            "registry-fingerprint-mismatch".to_string(),
+        )],
+        vec![],
+    );
+    let args = CiArgs {
+        omit_dev: false,
+        omit_optional: false,
+        allow_scripts: false,
+        dry_run: false,
+        post_verify: true,
+        init_lockfile: false,
+        format: OutputFormat::Json,
+        report: cwd.join("report.json"),
+        cwd: cwd.to_path_buf(),
+        package_manager: Some("npm".to_string()),
+        timeout: TEST_TIMEOUT_MS,
+        registry_max_in_flight: None,
+        quiet: true,
+    };
+    let lock_hash_before_verify = lockfile_sha256(cwd);
+    let previous_path = std::env::var("PATH").unwrap_or_default();
+    let patched_path = format!("{}:{}", bin_dir.display(), previous_path);
+    let home_dir = cwd.join("home");
+    std::fs::create_dir_all(&home_dir).expect("home dir should be created");
+
+    let exit = temp_env::async_with_vars(
+        [
+            ("PATH", Some(std::ffi::OsString::from(&patched_path))),
+            ("HOME", Some(home_dir.as_os_str().to_os_string())),
+        ],
+        async {
+            let finalize_ci_run_params = FinalizeCiRunParams {
+                args: &args,
+                report: &report,
+                lock_hash_before_verify: &lock_hash_before_verify,
+            };
+
+            finalize_ci_run(finalize_ci_run_params).await
+        },
+    )
+    .await;
+
+    assert_eq!(exit, ExitCode::FAILURE);
+    assert!(
+        !cwd.join(".sentinel")
+            .join("install-history.ndjson")
+            .exists(),
+        "failed post-verify must not append history ledger"
+    );
+}
+
+#[tokio::test]
+async fn test_finalize_install_run_post_verify_writes_install_history() {
+    let _guard = env_test_lock();
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let cwd = temp_dir.path();
+
+    std::fs::write(cwd.join("package-lock.json"), "{}").expect("lockfile should be written");
+    std::fs::write(
+        cwd.join("package.json"),
+        r#"{"name":"demo","version":"1.0.0"}"#,
+    )
+    .expect("package.json should be written");
+
+    let package_ref = PackageRef::new("lodash", "4.17.21");
+    let tarball_fingerprint =
+        create_installed_package_fixture(cwd, &package_ref, compute_directory_fingerprint);
+    let bin_dir = write_npm_ci_post_verify_stub(cwd, &package_ref);
+    let report = Report::from_results(
+        RunMode::Install,
+        vec![build_clean_verify_result(&package_ref, tarball_fingerprint)],
+        vec![],
+    );
+    let args = InstallArgs {
+        package: package_ref.to_string(),
+        allow_scripts: false,
+        dry_run: false,
+        post_verify: true,
+        format: OutputFormat::Json,
+        cwd: cwd.to_path_buf(),
+        package_manager: Some("npm".to_string()),
+        timeout: TEST_TIMEOUT_MS,
+        registry_max_in_flight: None,
+        quiet: true,
+    };
+    let lock_hash_before_verify = lockfile_sha256(cwd);
+    let previous_path = std::env::var("PATH").unwrap_or_default();
+    let patched_path = format!("{}:{}", bin_dir.display(), previous_path);
+    let home_dir = cwd.join("home");
+    std::fs::create_dir_all(&home_dir).expect("home dir should be created");
+
+    let outcome = temp_env::async_with_vars(
+        [
+            ("PATH", Some(std::ffi::OsString::from(&patched_path))),
+            ("HOME", Some(home_dir.as_os_str().to_os_string())),
+        ],
+        async {
+            let finalize_install_run_params = FinalizeInstallRunParams {
+                args: &args,
+                package_ref: &package_ref,
+                report: &report,
+                lock_hash_before_verify: &lock_hash_before_verify,
+                prevalidated_tarball: None,
+            };
+
+            finalize_install_run(finalize_install_run_params).await
+        },
+    )
+    .await;
+
+    assert_eq!(outcome.exit_code, ExitCode::SUCCESS);
+    assert!(!outcome.should_restore_snapshot);
+
+    let ledger_path = cwd.join(".sentinel").join("install-history.ndjson");
+    assert!(
+        ledger_path.exists(),
+        "install success should append history ledger"
+    );
+
+    let ledger_contents = std::fs::read_to_string(&ledger_path).expect("ledger should be readable");
+    assert!(ledger_contents.contains("\"command\":\"install\""));
+    assert!(ledger_contents.contains("\"name\":\"lodash\""));
+}
+
+#[tokio::test]
+async fn test_finalize_install_run_post_verify_failure_skips_history_write() {
+    let _guard = env_test_lock();
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let cwd = temp_dir.path();
+
+    std::fs::write(cwd.join("package-lock.json"), "{}").expect("lockfile should be written");
+    std::fs::write(
+        cwd.join("package.json"),
+        r#"{"name":"demo","version":"1.0.0"}"#,
+    )
+    .expect("package.json should be written");
+
+    let package_ref = PackageRef::new("lodash", "4.17.21");
+    let _ = create_installed_package_fixture(cwd, &package_ref, compute_directory_fingerprint);
+    let bin_dir = write_npm_ci_post_verify_stub(cwd, &package_ref);
+    let report = Report::from_results(
+        RunMode::Install,
+        vec![build_clean_verify_result(
+            &package_ref,
+            "registry-fingerprint-mismatch".to_string(),
+        )],
+        vec![],
+    );
+    let args = InstallArgs {
+        package: package_ref.to_string(),
+        allow_scripts: false,
+        dry_run: false,
+        post_verify: true,
+        format: OutputFormat::Json,
+        cwd: cwd.to_path_buf(),
+        package_manager: Some("npm".to_string()),
+        timeout: TEST_TIMEOUT_MS,
+        registry_max_in_flight: None,
+        quiet: true,
+    };
+    let lock_hash_before_verify = lockfile_sha256(cwd);
+    let previous_path = std::env::var("PATH").unwrap_or_default();
+    let patched_path = format!("{}:{}", bin_dir.display(), previous_path);
+    let home_dir = cwd.join("home");
+    std::fs::create_dir_all(&home_dir).expect("home dir should be created");
+
+    let outcome = temp_env::async_with_vars(
+        [
+            ("PATH", Some(std::ffi::OsString::from(&patched_path))),
+            ("HOME", Some(home_dir.as_os_str().to_os_string())),
+        ],
+        async {
+            let finalize_install_run_params = FinalizeInstallRunParams {
+                args: &args,
+                package_ref: &package_ref,
+                report: &report,
+                lock_hash_before_verify: &lock_hash_before_verify,
+                prevalidated_tarball: None,
+            };
+
+            finalize_install_run(finalize_install_run_params).await
+        },
+    )
+    .await;
+
+    assert_eq!(outcome.exit_code, ExitCode::FAILURE);
+    assert!(
+        !cwd.join(".sentinel")
+            .join("install-history.ndjson")
+            .exists(),
+        "failed install post-verify must not append history ledger"
+    );
 }
 
 #[test]
@@ -475,11 +821,13 @@ fn test_rollback_restores_package_json_when_install_blocked() {
     std::fs::write(&lockfile, b"{\"packages\":{\"node_modules/bad\":{}}}")
         .expect("mutated lockfile should be written");
 
-    restore_project_files_snapshot(RestoreProjectFilesSnapshotParams {
+    let restore_project_files_snapshot_params = RestoreProjectFilesSnapshotParams {
         snapshot: &snapshot,
         current_working_directory: temp_dir.path(),
-    })
-    .expect("snapshot restore should succeed");
+    };
+
+    restore_project_files_snapshot(restore_project_files_snapshot_params)
+        .expect("snapshot restore should succeed");
 
     let restored_package_json = std::fs::read(&package_json).expect("package.json should exist");
     let restored_lockfile = std::fs::read(&lockfile).expect("lockfile should exist");
@@ -508,11 +856,13 @@ fn test_dry_run_blocked_path_keeps_no_mutation_after_rollback() {
     std::fs::write(&lockfile, b"{\"packages\":{\"node_modules/risky\":{}}}")
         .expect("generated lockfile should be written");
 
-    restore_project_files_snapshot(RestoreProjectFilesSnapshotParams {
+    let restore_project_files_snapshot_params = RestoreProjectFilesSnapshotParams {
         snapshot: &snapshot,
         current_working_directory: temp_dir.path(),
-    })
-    .expect("snapshot restore should succeed");
+    };
+
+    restore_project_files_snapshot(restore_project_files_snapshot_params)
+        .expect("snapshot restore should succeed");
 
     let restored_package_json = std::fs::read(&package_json).expect("package.json should exist");
     assert_eq!(restored_package_json, original_package_json);
@@ -541,11 +891,13 @@ fn test_snapshot_restore_supports_yarn_lockfile() {
     std::fs::write(&lockfile, b"pkg@^1.0.0:\n  version \"9.9.9\"\n")
         .expect("mutated yarn.lock should be written");
 
-    restore_project_files_snapshot(RestoreProjectFilesSnapshotParams {
+    let restore_project_files_snapshot_params = RestoreProjectFilesSnapshotParams {
         snapshot: &snapshot,
         current_working_directory: temp_dir.path(),
-    })
-    .expect("snapshot restore should succeed");
+    };
+
+    restore_project_files_snapshot(restore_project_files_snapshot_params)
+        .expect("snapshot restore should succeed");
 
     let restored_package_json = std::fs::read(&package_json).expect("package.json should exist");
     let restored_lockfile = std::fs::read(&lockfile).expect("yarn.lock should exist");
@@ -634,6 +986,7 @@ esac
                 cwd: cwd.to_path_buf(),
                 package_manager: None,
                 timeout: 1,
+                registry_max_in_flight: None,
                 quiet: true,
             };
 
@@ -651,8 +1004,8 @@ esac
     assert_eq!(lock_after, "{}");
 }
 
-#[test]
-fn test_finalize_install_run_uses_spool_tarball_and_cleans_up_temp_file() {
+#[tokio::test]
+async fn test_finalize_install_run_uses_spool_tarball_and_cleans_up_temp_file() {
     let _guard = env_test_lock();
     let temp_dir = tempfile::tempdir().expect("tempdir should be created");
     let cwd = temp_dir.path();
@@ -693,31 +1046,37 @@ fn test_finalize_install_run_uses_spool_tarball_and_cleans_up_temp_file() {
     let previous_path = std::env::var("PATH").unwrap_or_default();
     let patched_path = format!("{}:{}", bin_dir.display(), previous_path);
 
-    let outcome = temp_env::with_var("PATH", Some(patched_path.as_str()), || {
-        let args = InstallArgs {
-            package: "lodash@4.17.21".to_string(),
-            allow_scripts: false,
-            dry_run: false,
-            post_verify: false,
-            format: OutputFormat::Json,
-            cwd: cwd.to_path_buf(),
-            package_manager: None,
-            timeout: 1000,
-            quiet: true,
-        };
+    let args = InstallArgs {
+        package: "lodash@4.17.21".to_string(),
+        allow_scripts: false,
+        dry_run: false,
+        post_verify: false,
+        format: OutputFormat::Json,
+        cwd: cwd.to_path_buf(),
+        package_manager: None,
+        timeout: TEST_TIMEOUT_MS,
+        registry_max_in_flight: None,
+        quiet: true,
+    };
+    let report = Report::from_results(RunMode::Install, vec![], vec![]);
+    let package_ref = PackageRef::new("lodash", "4.17.21");
+    let lock_hash_before_verify = lockfile_sha256(cwd);
 
-        let report = Report::from_results(RunMode::Install, vec![], vec![]);
-        let package_ref = PackageRef::new("lodash", "4.17.21");
-        let lock_hash_before_verify = lockfile_sha256(cwd);
+    let outcome = temp_env::async_with_vars(
+        [("PATH", Some(std::ffi::OsString::from(&patched_path)))],
+        async {
+            let finalize_install_run_params = FinalizeInstallRunParams {
+                args: &args,
+                package_ref: &package_ref,
+                report: &report,
+                lock_hash_before_verify: &lock_hash_before_verify,
+                prevalidated_tarball: Some(VerifiedTarball::Spool(spool_path.clone())),
+            };
 
-        finalize_install_run(FinalizeInstallRunParams {
-            args: &args,
-            package_ref: &package_ref,
-            report: &report,
-            lock_hash_before_verify: &lock_hash_before_verify,
-            prevalidated_tarball: Some(VerifiedTarball::Spool(spool_path.clone())),
-        })
-    });
+            finalize_install_run(finalize_install_run_params).await
+        },
+    )
+    .await;
 
     assert_eq!(outcome.exit_code, ExitCode::SUCCESS);
     assert!(!outcome.should_restore_snapshot);
@@ -733,8 +1092,8 @@ fn test_finalize_install_run_uses_spool_tarball_and_cleans_up_temp_file() {
     );
 }
 
-#[test]
-fn test_finalize_install_run_uses_yarn_cache_prewarm_without_rewriting_dependency_source() {
+#[tokio::test]
+async fn test_finalize_install_run_uses_yarn_cache_prewarm_without_rewriting_dependency_source() {
     let _guard = env_test_lock();
     let temp_dir = tempfile::tempdir().expect("tempdir should be created");
     let cwd = temp_dir.path();
@@ -777,31 +1136,37 @@ fn test_finalize_install_run_uses_yarn_cache_prewarm_without_rewriting_dependenc
     let previous_path = std::env::var("PATH").unwrap_or_default();
     let patched_path = format!("{}:{}", bin_dir.display(), previous_path);
 
-    let outcome = temp_env::with_var("PATH", Some(patched_path.as_str()), || {
-        let args = InstallArgs {
-            package: "lodash@4.17.21".to_string(),
-            allow_scripts: false,
-            dry_run: false,
-            post_verify: false,
-            format: OutputFormat::Json,
-            cwd: cwd.to_path_buf(),
-            package_manager: Some("yarn".to_string()),
-            timeout: 1000,
-            quiet: true,
-        };
+    let args = InstallArgs {
+        package: "lodash@4.17.21".to_string(),
+        allow_scripts: false,
+        dry_run: false,
+        post_verify: false,
+        format: OutputFormat::Json,
+        cwd: cwd.to_path_buf(),
+        package_manager: Some("yarn".to_string()),
+        timeout: TEST_TIMEOUT_MS,
+        registry_max_in_flight: None,
+        quiet: true,
+    };
+    let report = Report::from_results(RunMode::Install, vec![], vec![]);
+    let package_ref = PackageRef::new("lodash", "4.17.21");
+    let lock_hash_before_verify = lockfile_sha256(cwd);
 
-        let report = Report::from_results(RunMode::Install, vec![], vec![]);
-        let package_ref = PackageRef::new("lodash", "4.17.21");
-        let lock_hash_before_verify = lockfile_sha256(cwd);
+    let outcome = temp_env::async_with_vars(
+        [("PATH", Some(std::ffi::OsString::from(&patched_path)))],
+        async {
+            let finalize_install_run_params = FinalizeInstallRunParams {
+                args: &args,
+                package_ref: &package_ref,
+                report: &report,
+                lock_hash_before_verify: &lock_hash_before_verify,
+                prevalidated_tarball: Some(VerifiedTarball::Spool(spool_path.clone())),
+            };
 
-        finalize_install_run(FinalizeInstallRunParams {
-            args: &args,
-            package_ref: &package_ref,
-            report: &report,
-            lock_hash_before_verify: &lock_hash_before_verify,
-            prevalidated_tarball: Some(VerifiedTarball::Spool(spool_path.clone())),
-        })
-    });
+            finalize_install_run(finalize_install_run_params).await
+        },
+    )
+    .await;
 
     assert_eq!(outcome.exit_code, ExitCode::SUCCESS);
     assert!(
@@ -830,8 +1195,8 @@ fn test_finalize_install_run_uses_yarn_cache_prewarm_without_rewriting_dependenc
     assert!(!commands[1].contains(&spool_path.to_string_lossy().to_string()));
 }
 
-#[test]
-fn test_finalize_install_run_uses_pnpm_store_prewarm_without_rewriting_dependency_source() {
+#[tokio::test]
+async fn test_finalize_install_run_uses_pnpm_store_prewarm_without_rewriting_dependency_source() {
     let _guard = env_test_lock();
     let temp_dir = tempfile::tempdir().expect("tempdir should be created");
     let cwd = temp_dir.path();
@@ -877,31 +1242,37 @@ fn test_finalize_install_run_uses_pnpm_store_prewarm_without_rewriting_dependenc
     let previous_path = std::env::var("PATH").unwrap_or_default();
     let patched_path = format!("{}:{}", bin_dir.display(), previous_path);
 
-    let outcome = temp_env::with_var("PATH", Some(patched_path.as_str()), || {
-        let args = InstallArgs {
-            package: "lodash@4.17.21".to_string(),
-            allow_scripts: false,
-            dry_run: false,
-            post_verify: false,
-            format: OutputFormat::Json,
-            cwd: cwd.to_path_buf(),
-            package_manager: Some("pnpm".to_string()),
-            timeout: 1000,
-            quiet: true,
-        };
+    let args = InstallArgs {
+        package: "lodash@4.17.21".to_string(),
+        allow_scripts: false,
+        dry_run: false,
+        post_verify: false,
+        format: OutputFormat::Json,
+        cwd: cwd.to_path_buf(),
+        package_manager: Some("pnpm".to_string()),
+        timeout: TEST_TIMEOUT_MS,
+        registry_max_in_flight: None,
+        quiet: true,
+    };
+    let report = Report::from_results(RunMode::Install, vec![], vec![]);
+    let package_ref = PackageRef::new("lodash", "4.17.21");
+    let lock_hash_before_verify = lockfile_sha256(cwd);
 
-        let report = Report::from_results(RunMode::Install, vec![], vec![]);
-        let package_ref = PackageRef::new("lodash", "4.17.21");
-        let lock_hash_before_verify = lockfile_sha256(cwd);
+    let outcome = temp_env::async_with_vars(
+        [("PATH", Some(std::ffi::OsString::from(&patched_path)))],
+        async {
+            let finalize_install_run_params = FinalizeInstallRunParams {
+                args: &args,
+                package_ref: &package_ref,
+                report: &report,
+                lock_hash_before_verify: &lock_hash_before_verify,
+                prevalidated_tarball: Some(VerifiedTarball::Spool(spool_path.clone())),
+            };
 
-        finalize_install_run(FinalizeInstallRunParams {
-            args: &args,
-            package_ref: &package_ref,
-            report: &report,
-            lock_hash_before_verify: &lock_hash_before_verify,
-            prevalidated_tarball: Some(VerifiedTarball::Spool(spool_path.clone())),
-        })
-    });
+            finalize_install_run(finalize_install_run_params).await
+        },
+    )
+    .await;
 
     assert_eq!(outcome.exit_code, ExitCode::SUCCESS);
     assert!(
@@ -1089,12 +1460,13 @@ fn test_tarball_and_directory_fingerprints_consistent_when_symlink_present() {
 
 #[test]
 fn test_resolve_install_policy_forces_ignore_scripts_when_post_verify_active() {
-    let decision: InstallPolicyDecision = resolve_install_policy(ResolveInstallPolicyParams {
+    let resolve_install_policy_params = ResolveInstallPolicyParams {
         compromised_count: 0,
         unverifiable_count: 0,
         allow_scripts: false,
         post_verify: true,
-    });
+    };
+    let decision: InstallPolicyDecision = resolve_install_policy(resolve_install_policy_params);
 
     assert!(
         decision.ignore_scripts,
@@ -1105,12 +1477,13 @@ fn test_resolve_install_policy_forces_ignore_scripts_when_post_verify_active() {
 
 #[test]
 fn test_resolve_install_policy_allow_scripts_overrides_post_verify() {
-    let decision: InstallPolicyDecision = resolve_install_policy(ResolveInstallPolicyParams {
+    let resolve_install_policy_params = ResolveInstallPolicyParams {
         compromised_count: 0,
         unverifiable_count: 0,
         allow_scripts: true,
         post_verify: true,
-    });
+    };
+    let decision: InstallPolicyDecision = resolve_install_policy(resolve_install_policy_params);
 
     assert!(
         !decision.ignore_scripts,
@@ -1120,12 +1493,13 @@ fn test_resolve_install_policy_allow_scripts_overrides_post_verify() {
 
 #[test]
 fn test_resolve_install_policy_blocks_scripts_by_default_without_post_verify() {
-    let decision: InstallPolicyDecision = resolve_install_policy(ResolveInstallPolicyParams {
+    let resolve_install_policy_params = ResolveInstallPolicyParams {
         compromised_count: 0,
         unverifiable_count: 0,
         allow_scripts: false,
         post_verify: false,
-    });
+    };
+    let decision: InstallPolicyDecision = resolve_install_policy(resolve_install_policy_params);
 
     assert!(
         decision.ignore_scripts,
@@ -1264,6 +1638,7 @@ fn test_ci_blocking_ignores_provenance_missing_only_results() {
         cwd: std::path::PathBuf::from("."),
         package_manager: None,
         timeout: crate::constants::CI_REGISTRY_TIMEOUT_MS,
+        registry_max_in_flight: None,
         quiet: true,
     };
 
@@ -1279,10 +1654,11 @@ fn test_ci_blocking_ignores_provenance_missing_only_results() {
         tarball_fingerprint: None,
     }];
 
-    let blocked = print_ci_blocking_results(PrintCiBlockingResultsParams {
+    let print_ci_blocking_results_params = PrintCiBlockingResultsParams {
         results: &results,
         args: &args,
-    });
+    };
+    let blocked = print_ci_blocking_results(print_ci_blocking_results_params);
     assert!(!blocked, "ci must not block for missing provenance");
 }
 
@@ -1300,6 +1676,7 @@ fn test_ci_blocking_blocks_on_provenance_inconsistent() {
         cwd: std::path::PathBuf::from("."),
         package_manager: None,
         timeout: crate::constants::CI_REGISTRY_TIMEOUT_MS,
+        registry_max_in_flight: None,
         quiet: true,
     };
 
@@ -1315,10 +1692,11 @@ fn test_ci_blocking_blocks_on_provenance_inconsistent() {
         tarball_fingerprint: None,
     }];
 
-    let blocked = print_ci_blocking_results(PrintCiBlockingResultsParams {
+    let print_ci_blocking_results_params = PrintCiBlockingResultsParams {
         results: &results,
         args: &args,
-    });
+    };
+    let blocked = print_ci_blocking_results(print_ci_blocking_results_params);
     assert!(blocked, "ci must block for inconsistent provenance");
 }
 
