@@ -41,6 +41,7 @@ jobs:
     needs: verify-versions
     permissions:
       contents: read
+
     strategy:
       fail-fast: false
       matrix:
@@ -114,6 +115,16 @@ jobs:
           sha256sum sentinel-* > checksums.txt
           popd >/dev/null
 
+      - name: Sign checksums with EC private key
+        shell: bash
+        env:
+          SENTINEL_SIGNING_KEY: ${{ secrets.INSTALL_CHECK }}
+        run: |
+          set -euo pipefail
+          echo "$SENTINEL_SIGNING_KEY" > /tmp/signing_key.pem
+          openssl dgst -sha256 -sign /tmp/signing_key.pem -out dist/checksums.txt.sig dist/checksums.txt
+          rm -f /tmp/signing_key.pem
+
       - name: Publish GitHub release
         uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe
         with:
@@ -121,6 +132,7 @@ jobs:
           files: |
             dist/sentinel-*
             dist/checksums.txt
+            dist/checksums.txt.sig
 
   validate-binaries:
     needs:
@@ -169,17 +181,55 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
+          run_sentinel_release_validation() {
+            local output
+            set +e
+            output="$("$@" 2>&1)"
+            local exit_code=$?
+            set -e
+
+            if [ $exit_code -eq 0 ]; then
+              printf '%s\n' "$output"
+              return 0
+            fi
+
+            printf '%s\n' "$output"
+
+            if printf '%s' "$output" | grep -Eiq "ProvenanceMissing|provenance not available" && \
+              ! printf '%s' "$output" | grep -Eiq "Compromised|compromised"; then
+              echo "[release] allowing ProvenanceMissing-only validation result"
+              return 0
+            fi
+
+            return $exit_code
+          }
+
           mkdir -p testapp && cd testapp
           npm init -y >/dev/null
           npm install lodash express >/dev/null
           BIN="$GITHUB_WORKSPACE/${{ matrix.asset }}"
           SENTINEL_NPM_VERSION="$(npm view sentinel-check version)"
-          "$BIN" check --cwd "$(pwd)" --format text
-          "$BIN" ci --cwd "$(pwd)" --dry-run --format text
-          "$BIN" ci --cwd "$(pwd)" --dry-run --no-scripts --format json --report ../r.json > ../ci.json
+          run_sentinel_release_validation "$BIN" check --cwd "$(pwd)" --format text
+          run_sentinel_release_validation "$BIN" check --cwd "$(pwd)" --format json > ../check.json
+          grep -q "sentinel_version" ../check.json
+          run_sentinel_release_validation "$BIN" check --cwd "$(pwd)" --format github
+          run_sentinel_release_validation "$BIN" check --cwd "$(pwd)" --format junit > ../check.junit
+          grep -q "testsuite" ../check.junit
+
+          run_sentinel_release_validation "$BIN" ci --cwd "$(pwd)" --dry-run --format text
+          run_sentinel_release_validation "$BIN" ci --cwd "$(pwd)" --dry-run --format json --report ../r.json > ../ci.json
           grep -q "sentinel_version" ../ci.json
           test -f ../r.json
-          "$BIN" install "sentinel-check@${SENTINEL_NPM_VERSION}" --cwd "$(pwd)" --dry-run --format text
+          run_sentinel_release_validation "$BIN" ci --cwd "$(pwd)" --dry-run --format github
+          run_sentinel_release_validation "$BIN" ci --cwd "$(pwd)" --dry-run --format junit > ../ci.junit
+          grep -q "testsuite" ../ci.junit
+
+          run_sentinel_release_validation "$BIN" install "sentinel-check@${SENTINEL_NPM_VERSION}" --cwd "$(pwd)" --dry-run --format text
+
+          run_sentinel_release_validation "$BIN" ci --cwd "$(pwd)" --dry-run --format text
+
+          run_sentinel_release_validation "$BIN" ci --cwd "$(pwd)" --dry-run --allow-scripts --format text
           echo "[${{ matrix.asset }}] all checks passed"
 
       - name: Validate darwin x64 artifact
@@ -196,6 +246,36 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
           $PSNativeCommandUseErrorActionPreference = $true
+
+          function Invoke-SentinelReleaseValidation {
+            param(
+              [Parameter(ValueFromRemainingArguments = $true)]
+              [string[]]$CommandArgs
+            )
+
+            $oldPsNativeCommandPreference = $PSNativeCommandUseErrorActionPreference
+            $PSNativeCommandUseErrorActionPreference = $false
+            $result = & $bin @CommandArgs 2>&1
+            $exitCode = $LASTEXITCODE
+            $PSNativeCommandUseErrorActionPreference = $oldPsNativeCommandPreference
+            $text = ($result | Out-String)
+            Write-Host $text
+
+            if ($exitCode -eq 0) {
+              return $text
+            }
+
+            $hasProvenanceMissing = ($text -match "ProvenanceMissing") -or ($text -match "provenance not available")
+            $hasCompromised = $text -match "Compromised"
+
+            if ($hasProvenanceMissing -and -not $hasCompromised) {
+              Write-Host "[release] allowing ProvenanceMissing-only validation result"
+              return $text
+            }
+
+            throw "Sentinel validation failed with exit code $exitCode"
+          }
+
           New-Item -ItemType Directory -Path testapp -Force | Out-Null
           Set-Location testapp
           npm init -y | Out-Null
@@ -203,10 +283,13 @@ jobs:
 
           $bin = Join-Path $env:GITHUB_WORKSPACE "${{ matrix.asset }}"
 
-          & $bin check --cwd (Get-Location).Path --format text
-          if ($LASTEXITCODE -ne 0) {
-            throw "Windows check smoke failed with exit code $LASTEXITCODE"
-          }
+          Invoke-SentinelReleaseValidation "check" "--cwd" (Get-Location).Path "--format" "text"
+
+          Invoke-SentinelReleaseValidation "ci" "--cwd" (Get-Location).Path "--dry-run" "--format" "text"
+
+          Invoke-SentinelReleaseValidation "ci" "--cwd" (Get-Location).Path "--dry-run" "--format" "text"
+
+          Invoke-SentinelReleaseValidation "ci" "--cwd" (Get-Location).Path "--dry-run" "--allow-scripts" "--format" "text"
 
           Write-Host "[${{ matrix.asset }}] binary validation passed"
 

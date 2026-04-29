@@ -45,7 +45,8 @@ Recommended approach for restricted environments:
 1. Mirror release artifacts internally (binary + `checksums.txt`).
 2. Set wrapper/binary configuration to use approved internal paths.
 3. Run `sentinel check` and `sentinel ci` with local cache enabled.
-4. Keep strict CI policy: block on `UNVERIFIABLE` and `COMPROMISED`.
+4. If a controlled bootstrap is needed, use `sentinel ci --init` explicitly rather than relying on manual lockfile regeneration outside Sentinel.
+5. Keep strict CI policy: block on `UNVERIFIABLE` and `COMPROMISED`.
 
 Operational note:
 
@@ -59,6 +60,7 @@ Use this checklist during security/design reviews:
 - [ ] threat model documented ([THREAT_MODEL.md](THREAT_MODEL.md))
 - [ ] disclosure policy documented ([SECURITY.md](SECURITY.md))
 - [ ] CI policy defined (`sentinel ci` blocks on `UNVERIFIABLE` and `COMPROMISED`)
+- [ ] lockfile bootstrap policy defined (`sentinel ci --init` allowed only for controlled initialization/recovery)
 - [ ] machine-readable reporting enabled (`--format json` and/or `--format junit`)
 - [ ] release integrity verification process documented (checksums)
 

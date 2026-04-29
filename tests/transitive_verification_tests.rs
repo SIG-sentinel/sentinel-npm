@@ -1,3 +1,12 @@
+#![allow(
+    clippy::expect_used,
+    clippy::panic,
+    clippy::err_expect,
+    clippy::too_many_arguments,
+    clippy::needless_raw_string_hashes,
+    unused_qualifications
+)]
+
 mod common;
 
 use sentinel::types::{
@@ -5,35 +14,87 @@ use sentinel::types::{
     Verdict, VerifyResult,
 };
 
+fn node(
+    name: impl Into<String>,
+    version: impl Into<String>,
+    dependencies: Vec<String>,
+) -> DependencyNode {
+    DependencyNode {
+        package: PackageRef::new(name.into(), version.into()),
+        dependencies,
+        is_dev: false,
+        is_direct: false,
+        direct_parent: None,
+    }
+}
+
+fn clean_result(
+    name: impl Into<String>,
+    version: impl Into<String>,
+    detail: impl Into<String>,
+) -> VerifyResult {
+    VerifyResult {
+        package: PackageRef::new(name.into(), version.into()),
+        verdict: Verdict::Clean,
+        detail: detail.into(),
+        evidence: Evidence::empty(),
+        is_direct: false,
+        direct_parent: None,
+        tarball_fingerprint: None,
+    }
+}
+
+fn unverifiable_result(
+    name: impl Into<String>,
+    version: impl Into<String>,
+    reason: UnverifiableReason,
+    detail: impl Into<String>,
+) -> VerifyResult {
+    VerifyResult {
+        package: PackageRef::new(name.into(), version.into()),
+        verdict: Verdict::Unverifiable { reason },
+        detail: detail.into(),
+        evidence: Evidence::empty(),
+        is_direct: false,
+        direct_parent: None,
+        tarball_fingerprint: None,
+    }
+}
+
+fn compromised_result(
+    name: impl Into<String>,
+    version: impl Into<String>,
+    expected: impl Into<String>,
+    actual: impl Into<String>,
+    source: CompromisedSource,
+    detail: impl Into<String>,
+    evidence: Evidence,
+) -> VerifyResult {
+    VerifyResult {
+        package: PackageRef::new(name.into(), version.into()),
+        verdict: Verdict::Compromised {
+            expected: expected.into(),
+            actual: actual.into(),
+            source,
+        },
+        detail: detail.into(),
+        evidence,
+        is_direct: false,
+        direct_parent: None,
+        tarball_fingerprint: None,
+    }
+}
+
 #[test]
 fn test_verification_all_clean_simple_tree() {
     let mut tree = DependencyTree::new();
 
-    tree.insert(DependencyNode {
-        package: PackageRef::new("app", "1.0.0"),
-        dependencies: vec!["express@4.18.0".to_string()],
-        is_dev: false,
-    });
-
-    tree.insert(DependencyNode {
-        package: PackageRef::new("express", "4.18.0"),
-        dependencies: vec![],
-        is_dev: false,
-    });
+    tree.insert(node("app", "1.0.0", vec!["express@4.18.0".to_string()]));
+    tree.insert(node("express", "4.18.0", vec![]));
 
     let verify_results = [
-        VerifyResult {
-            package: PackageRef::new("app", "1.0.0"),
-            verdict: Verdict::Clean,
-            detail: "verified via registry".to_string(),
-            evidence: Evidence::empty(),
-        },
-        VerifyResult {
-            package: PackageRef::new("express", "4.18.0"),
-            verdict: Verdict::Clean,
-            detail: "verified via registry".to_string(),
-            evidence: Evidence::empty(),
-        },
+        clean_result("app", "1.0.0", "verified via registry"),
+        clean_result("express", "4.18.0", "verified via registry"),
     ];
 
     let clean_count = verify_results
@@ -47,51 +108,30 @@ fn test_verification_all_clean_simple_tree() {
 fn test_verification_compromised_in_transitive() {
     let mut tree = DependencyTree::new();
 
-    tree.insert(DependencyNode {
-        package: PackageRef::new("app", "1.0.0"),
-        dependencies: vec!["express@4.18.0".to_string()],
-        is_dev: false,
-    });
-
-    tree.insert(DependencyNode {
-        package: PackageRef::new("express", "4.18.0"),
-        dependencies: vec!["compromised-lib@1.0.0".to_string()],
-        is_dev: false,
-    });
-
-    tree.insert(DependencyNode {
-        package: PackageRef::new("compromised-lib", "1.0.0"),
-        dependencies: vec![],
-        is_dev: false,
-    });
+    tree.insert(node("app", "1.0.0", vec!["express@4.18.0".to_string()]));
+    tree.insert(node(
+        "express",
+        "4.18.0",
+        vec!["compromised-lib@1.0.0".to_string()],
+    ));
+    tree.insert(node("compromised-lib", "1.0.0", vec![]));
 
     let verify_results = [
-        VerifyResult {
-            package: PackageRef::new("app", "1.0.0"),
-            verdict: Verdict::Clean,
-            detail: "verified".to_string(),
-            evidence: Evidence::empty(),
-        },
-        VerifyResult {
-            package: PackageRef::new("express", "4.18.0"),
-            verdict: Verdict::Clean,
-            detail: "verified".to_string(),
-            evidence: Evidence::empty(),
-        },
-        VerifyResult {
-            package: PackageRef::new("compromised-lib", "1.0.0"),
-            verdict: Verdict::Compromised {
-                expected: "sha512-abc123".to_string(),
-                actual: "sha512-xyz789".to_string(),
-                source: CompromisedSource::LockfileVsRegistry,
-            },
-            detail: "integrity mismatch".to_string(),
-            evidence: Evidence {
+        clean_result("app", "1.0.0", "verified"),
+        clean_result("express", "4.18.0", "verified"),
+        compromised_result(
+            "compromised-lib",
+            "1.0.0",
+            "sha512-abc123",
+            "sha512-xyz789",
+            CompromisedSource::LockfileVsRegistry,
+            "integrity mismatch",
+            Evidence {
                 registry_integrity: Some("sha512-xyz789".to_string()),
                 lockfile_integrity: Some("sha512-abc123".to_string()),
                 ..Evidence::empty()
             },
-        },
+        ),
     ];
 
     let compromised = verify_results
@@ -111,69 +151,27 @@ fn test_verification_compromised_in_transitive() {
 fn test_verification_unverifiable_in_deep_tree() {
     let mut tree = DependencyTree::new();
 
-    tree.insert(DependencyNode {
-        package: PackageRef::new("app", "1.0.0"),
-        dependencies: vec!["a@1.0.0".to_string()],
-        is_dev: false,
-    });
-
-    tree.insert(DependencyNode {
-        package: PackageRef::new("a", "1.0.0"),
-        dependencies: vec!["b@1.0.0".to_string()],
-        is_dev: false,
-    });
-
-    tree.insert(DependencyNode {
-        package: PackageRef::new("b", "1.0.0"),
-        dependencies: vec!["c@1.0.0".to_string()],
-        is_dev: false,
-    });
-
-    tree.insert(DependencyNode {
-        package: PackageRef::new("c", "1.0.0"),
-        dependencies: vec!["unverifiable-lib@1.0.0".to_string()],
-        is_dev: false,
-    });
-
-    tree.insert(DependencyNode {
-        package: PackageRef::new("unverifiable-lib", "1.0.0"),
-        dependencies: vec![],
-        is_dev: false,
-    });
+    tree.insert(node("app", "1.0.0", vec!["a@1.0.0".to_string()]));
+    tree.insert(node("a", "1.0.0", vec!["b@1.0.0".to_string()]));
+    tree.insert(node("b", "1.0.0", vec!["c@1.0.0".to_string()]));
+    tree.insert(node(
+        "c",
+        "1.0.0",
+        vec!["unverifiable-lib@1.0.0".to_string()],
+    ));
+    tree.insert(node("unverifiable-lib", "1.0.0", vec![]));
 
     let verify_results = [
-        VerifyResult {
-            package: PackageRef::new("app", "1.0.0"),
-            verdict: Verdict::Clean,
-            detail: "verified".to_string(),
-            evidence: Evidence::empty(),
-        },
-        VerifyResult {
-            package: PackageRef::new("a", "1.0.0"),
-            verdict: Verdict::Clean,
-            detail: "verified".to_string(),
-            evidence: Evidence::empty(),
-        },
-        VerifyResult {
-            package: PackageRef::new("b", "1.0.0"),
-            verdict: Verdict::Clean,
-            detail: "verified".to_string(),
-            evidence: Evidence::empty(),
-        },
-        VerifyResult {
-            package: PackageRef::new("c", "1.0.0"),
-            verdict: Verdict::Clean,
-            detail: "verified".to_string(),
-            evidence: Evidence::empty(),
-        },
-        VerifyResult {
-            package: PackageRef::new("unverifiable-lib", "1.0.0"),
-            verdict: Verdict::Unverifiable {
-                reason: UnverifiableReason::NoIntegrityField,
-            },
-            detail: "registry has no dist.integrity".to_string(),
-            evidence: Evidence::empty(),
-        },
+        clean_result("app", "1.0.0", "verified"),
+        clean_result("a", "1.0.0", "verified"),
+        clean_result("b", "1.0.0", "verified"),
+        clean_result("c", "1.0.0", "verified"),
+        unverifiable_result(
+            "unverifiable-lib",
+            "1.0.0",
+            UnverifiableReason::NoIntegrityField,
+            "registry has no dist.integrity",
+        ),
     ];
 
     let unverifiable = verify_results
@@ -192,55 +190,20 @@ fn test_verification_unverifiable_in_deep_tree() {
 fn test_verification_diamond_dependency() {
     let mut tree = DependencyTree::new();
 
-    tree.insert(DependencyNode {
-        package: PackageRef::new("app", "1.0.0"),
-        dependencies: vec!["a@1.0.0".to_string(), "b@1.0.0".to_string()],
-        is_dev: false,
-    });
-
-    tree.insert(DependencyNode {
-        package: PackageRef::new("a", "1.0.0"),
-        dependencies: vec!["c@1.0.0".to_string()],
-        is_dev: false,
-    });
-
-    tree.insert(DependencyNode {
-        package: PackageRef::new("b", "1.0.0"),
-        dependencies: vec!["c@1.0.0".to_string()],
-        is_dev: false,
-    });
-
-    tree.insert(DependencyNode {
-        package: PackageRef::new("c", "1.0.0"),
-        dependencies: vec![],
-        is_dev: false,
-    });
+    tree.insert(node(
+        "app",
+        "1.0.0",
+        vec!["a@1.0.0".to_string(), "b@1.0.0".to_string()],
+    ));
+    tree.insert(node("a", "1.0.0", vec!["c@1.0.0".to_string()]));
+    tree.insert(node("b", "1.0.0", vec!["c@1.0.0".to_string()]));
+    tree.insert(node("c", "1.0.0", vec![]));
 
     let verify_results = [
-        VerifyResult {
-            package: PackageRef::new("app", "1.0.0"),
-            verdict: Verdict::Clean,
-            detail: "verified".to_string(),
-            evidence: Evidence::empty(),
-        },
-        VerifyResult {
-            package: PackageRef::new("a", "1.0.0"),
-            verdict: Verdict::Clean,
-            detail: "verified".to_string(),
-            evidence: Evidence::empty(),
-        },
-        VerifyResult {
-            package: PackageRef::new("b", "1.0.0"),
-            verdict: Verdict::Clean,
-            detail: "verified".to_string(),
-            evidence: Evidence::empty(),
-        },
-        VerifyResult {
-            package: PackageRef::new("c", "1.0.0"),
-            verdict: Verdict::Clean,
-            detail: "verified once despite multiple paths".to_string(),
-            evidence: Evidence::empty(),
-        },
+        clean_result("app", "1.0.0", "verified"),
+        clean_result("a", "1.0.0", "verified"),
+        clean_result("b", "1.0.0", "verified"),
+        clean_result("c", "1.0.0", "verified once despite multiple paths"),
     ];
 
     assert_eq!(
@@ -261,65 +224,37 @@ fn test_verification_diamond_dependency() {
 fn test_verification_mixed_verdicts() {
     let mut tree = DependencyTree::new();
 
-    tree.insert(DependencyNode {
-        package: PackageRef::new("app", "1.0.0"),
-        dependencies: vec![
+    tree.insert(node(
+        "app",
+        "1.0.0",
+        vec![
             "clean-pkg@1.0.0".to_string(),
             "compromised-pkg@1.0.0".to_string(),
             "unverifiable-pkg@1.0.0".to_string(),
         ],
-        is_dev: false,
-    });
-
-    tree.insert(DependencyNode {
-        package: PackageRef::new("clean-pkg", "1.0.0"),
-        dependencies: vec![],
-        is_dev: false,
-    });
-
-    tree.insert(DependencyNode {
-        package: PackageRef::new("compromised-pkg", "1.0.0"),
-        dependencies: vec![],
-        is_dev: false,
-    });
-
-    tree.insert(DependencyNode {
-        package: PackageRef::new("unverifiable-pkg", "1.0.0"),
-        dependencies: vec![],
-        is_dev: false,
-    });
+    ));
+    tree.insert(node("clean-pkg", "1.0.0", vec![]));
+    tree.insert(node("compromised-pkg", "1.0.0", vec![]));
+    tree.insert(node("unverifiable-pkg", "1.0.0", vec![]));
 
     let verify_results = [
-        VerifyResult {
-            package: PackageRef::new("app", "1.0.0"),
-            verdict: Verdict::Clean,
-            detail: "verified".to_string(),
-            evidence: Evidence::empty(),
-        },
-        VerifyResult {
-            package: PackageRef::new("clean-pkg", "1.0.0"),
-            verdict: Verdict::Clean,
-            detail: "verified".to_string(),
-            evidence: Evidence::empty(),
-        },
-        VerifyResult {
-            package: PackageRef::new("compromised-pkg", "1.0.0"),
-            verdict: Verdict::Compromised {
-                expected: "sha1".to_string(),
-                actual: "sha2".to_string(),
-                source: CompromisedSource::DownloadVsRegistry,
-            },
-            detail: "integrity mismatch".to_string(),
-            evidence: Evidence::empty(),
-        },
-        VerifyResult {
-            package: PackageRef::new("unverifiable-pkg", "1.0.0"),
-            verdict: Verdict::Unverifiable {
-                reason: UnverifiableReason::RegistryOffline,
-            },
-            detail: "registry offline".to_string(),
-            evidence: Evidence::empty(),
-        },
+        clean_result("app", "1.0.0", "verified"),
+        clean_result("clean-pkg", "1.0.0", "verified"),
+        compromised_result(
+            "compromised-pkg",
+            "1.0.0",
+            "sha1",
+            "sha2",
+            CompromisedSource::DownloadVsRegistry,
+            "integrity mismatch",
+            Evidence::empty(),
+        ),
+        unverifiable_result(
+            "unverifiable-pkg",
+            "1.0.0",
+            UnverifiableReason::RegistryOffline,
+            "registry offline",
+        ),
     ];
 
     let clean_count = verify_results
@@ -348,15 +283,12 @@ fn test_verification_count_unique_packages() {
     let mut tree = DependencyTree::new();
 
     for i in 0..100 {
-        tree.insert(DependencyNode {
-            package: PackageRef::new(format!("pkg-{}", i), "1.0.0"),
-            dependencies: if i == 0 {
-                vec![]
-            } else {
-                vec![format!("pkg-{}", i - 1) + "@1.0.0"]
-            },
-            is_dev: false,
-        });
+        let dependencies = match i {
+            0 => vec![],
+            _ => vec![format!("pkg-{}@1.0.0", i - 1)],
+        };
+
+        tree.insert(node(format!("pkg-{i}"), "1.0.0", dependencies));
     }
 
     assert_eq!(tree.nodes.len(), 100);

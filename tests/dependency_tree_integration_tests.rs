@@ -1,3 +1,12 @@
+#![allow(
+    clippy::expect_used,
+    clippy::panic,
+    clippy::err_expect,
+    clippy::too_many_arguments,
+    clippy::needless_raw_string_hashes,
+    unused_qualifications
+)]
+
 use std::fs;
 
 use sentinel::npm::build_dependency_tree;

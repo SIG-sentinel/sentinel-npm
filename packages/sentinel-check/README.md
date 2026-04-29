@@ -62,6 +62,13 @@ GitHub Actions:
   run: npx --yes sentinel-check ci
 ```
 
+If the workflow needs Sentinel to initialize the lockfile first:
+
+```yaml
+- name: Initialize lockfile and verify dependency integrity
+  run: npx --yes sentinel-check ci --init-lockfile
+```
+
 ---
 
 ## Notes
@@ -69,7 +76,7 @@ GitHub Actions:
 1. The wrapper downloads the matching Sentinel release binary on first use.
 2. Downloaded binaries are cached locally.
 3. Integrity is verified using release checksums before execution.
-4. If you see `dependency cycles detected`, Sentinel found circular dependency chains in the lockfile graph. **Verification continues and cycles are reported as a warning.** You'll still see the integrity status of all packages. For a safe first recovery step, remove `node_modules` and rerun `npx --yes sentinel-check ci`. If lockfile recovery is needed, remove the lockfile and rerun `npx --yes sentinel-check ci` so Sentinel regenerates it in the guarded flow.
+4. If you see `dependency cycles detected`, Sentinel found circular dependency chains in the lockfile graph. **Verification continues and cycles are reported as a warning.** You'll still see the integrity status of all packages. For a safe first recovery step, remove `node_modules` and rerun `npx --yes sentinel-check ci`. If lockfile recovery is needed, remove the lockfile and rerun `npx --yes sentinel-check ci --init-lockfile` so Sentinel regenerates it in the guarded flow.
 
 ## More documentation
 
@@ -81,10 +88,10 @@ GitHub Actions:
 
 ## Useful environment variables
 
-| Variable | Description |
-| --- | --- |
-| `SENTINEL_BIN` | Use an existing local sentinel binary |
-| `SENTINEL_VERSION` | Pin a specific Sentinel version |
-| `SENTINEL_SKIP_DOWNLOAD=1` | Disable automatic binary download |
+| Variable                   | Description                           |
+| -------------------------- | ------------------------------------- |
+| `SENTINEL_BIN`             | Use an existing local sentinel binary |
+| `SENTINEL_VERSION`         | Pin a specific Sentinel version       |
+| `SENTINEL_SKIP_DOWNLOAD=1` | Disable automatic binary download     |
 
 See the [main README](https://github.com/SIG-sentinel/sentinel-npm#readme) for full CLI usage and binary installation options.

@@ -1,7 +1,10 @@
 pub mod cache;
 pub mod cli;
+pub mod cli_parsers;
 pub mod crypto;
+pub mod install;
 pub mod lockfile_check;
+pub mod manager;
 pub mod messages;
 pub mod npm;
 pub mod paths;
@@ -10,8 +13,11 @@ pub mod template;
 
 pub use cache::*;
 pub use cli::*;
+pub use cli_parsers::*;
 pub use crypto::*;
+pub use install::*;
 pub use lockfile_check::*;
+pub use manager::*;
 pub use messages::*;
 pub use npm::*;
 pub use paths::*;

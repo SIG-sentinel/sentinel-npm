@@ -1,4 +1,5 @@
 use super::install::CleanInstallPlanParams;
+use super::manager::PackageManager;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CommandPlan {
@@ -11,4 +12,8 @@ pub trait InstallExecutor {
     fn resolve_package_lockfile_plan(&self, package_reference: &str) -> CommandPlan;
     fn install_package_plan(&self, package_reference: &str, ignore_scripts: bool) -> CommandPlan;
     fn clean_install_plan(&self, params: CleanInstallPlanParams) -> CommandPlan;
+}
+
+pub struct PackageManagerExecutor {
+    pub(crate) manager: PackageManager,
 }

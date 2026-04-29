@@ -2,68 +2,53 @@ use std::path::PathBuf;
 
 use clap::Args;
 
-use crate::constants::{CI_REGISTRY_TIMEOUT_MS, DEFAULT_REGISTRY_TIMEOUT_MS};
+use crate::cli_parsers::{
+    parse_exact_package_version, parse_positive_usize, parse_rfc3339_timestamp,
+};
+use crate::constants::{
+    CI_REGISTRY_TIMEOUT_MS, CLI_ARG_DEFAULT_CWD, CLI_ARG_DEFAULT_OUTPUT_FORMAT,
+    CLI_ARG_DEFAULT_REPORT_PATH, CLI_ARG_VALUE_NAME_PACKAGE_MANAGER,
+    CLI_ARG_VALUE_NAME_PACKAGE_WITH_VERSION, CLI_ARG_VALUE_NAME_POSITIVE_INTEGER,
+    CLI_ARG_VALUE_NAME_TIMESTAMP_RANGE, CLI_HELP_ALLOW_SCRIPTS, CLI_HELP_REGISTRY_MAX_IN_FLIGHT,
+    DEFAULT_REGISTRY_TIMEOUT_MS,
+};
+use crate::types::HistoryOutputFormat;
 use crate::types::OutputFormat;
 
-fn parse_exact_package_version(value: &str) -> Result<String, String> {
-    let last_at = value
-        .rfind('@')
-        .ok_or_else(|| "expected format <package>@<exact-version>".to_string())?;
-
-    let package_name = &value[..last_at];
-    let package_version = &value[last_at + 1..];
-
-    if package_name.is_empty() || package_version.is_empty() {
-        return Err("expected format <package>@<exact-version>".to_string());
-    }
-
-    if matches!(package_version, "latest" | "next") {
-        return Err("version tag is not allowed; provide an exact version".to_string());
-    }
-
-    let has_range_tokens = package_version
-        .chars()
-        .any(|c| matches!(c, '^' | '~' | '>' | '<' | '=' | '*' | 'x' | 'X' | '|'));
-    if has_range_tokens {
-        return Err("version range is not allowed; provide an exact version".to_string());
-    }
-
-    let valid_chars = package_version
-        .chars()
-        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '+'));
-    if !valid_chars {
-        return Err("version contains invalid characters".to_string());
-    }
-
-    if !package_version.chars().any(|c| c.is_ascii_digit()) {
-        return Err("version must contain numeric components".to_string());
-    }
-
-    Ok(value.to_string())
-}
-
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Args, Debug)]
 pub struct InstallArgs {
-    #[arg(value_name = "PACKAGE@VERSION", value_parser = parse_exact_package_version)]
+    #[arg(value_name = CLI_ARG_VALUE_NAME_PACKAGE_WITH_VERSION, value_parser = parse_exact_package_version)]
     pub package: String,
 
-    #[arg(long)]
+    #[arg(long, help = CLI_HELP_ALLOW_SCRIPTS)]
     pub allow_scripts: bool,
-
-    #[arg(long)]
-    pub no_scripts: bool,
 
     #[arg(long)]
     pub dry_run: bool,
 
-    #[arg(long, default_value = "text", value_enum)]
+    #[arg(long)]
+    pub post_verify: bool,
+
+    #[arg(long, default_value = CLI_ARG_DEFAULT_OUTPUT_FORMAT, value_enum)]
     pub format: OutputFormat,
 
-    #[arg(long, default_value = ".")]
+    #[arg(long, default_value = CLI_ARG_DEFAULT_CWD)]
     pub cwd: PathBuf,
+
+    #[arg(long, value_name = CLI_ARG_VALUE_NAME_PACKAGE_MANAGER)]
+    pub package_manager: Option<String>,
 
     #[arg(long, default_value_t = DEFAULT_REGISTRY_TIMEOUT_MS)]
     pub timeout: u64,
+
+    #[arg(
+        long,
+        value_name = CLI_ARG_VALUE_NAME_POSITIVE_INTEGER,
+        value_parser = parse_positive_usize,
+        help = CLI_HELP_REGISTRY_MAX_IN_FLIGHT
+    )]
+    pub registry_max_in_flight: Option<usize>,
 
     #[arg(long, short = 'q')]
     pub quiet: bool,
@@ -77,19 +62,31 @@ pub struct CheckArgs {
     #[arg(long)]
     pub omit_optional: bool,
 
-    #[arg(long, default_value = "text", value_enum)]
+    #[arg(long, default_value = CLI_ARG_DEFAULT_OUTPUT_FORMAT, value_enum)]
     pub format: OutputFormat,
 
-    #[arg(long, default_value = ".")]
+    #[arg(long, default_value = CLI_ARG_DEFAULT_CWD)]
     pub cwd: PathBuf,
+
+    #[arg(long, value_name = CLI_ARG_VALUE_NAME_PACKAGE_MANAGER)]
+    pub package_manager: Option<String>,
 
     #[arg(long, default_value_t = DEFAULT_REGISTRY_TIMEOUT_MS)]
     pub timeout: u64,
+
+    #[arg(
+        long,
+        value_name = CLI_ARG_VALUE_NAME_POSITIVE_INTEGER,
+        value_parser = parse_positive_usize,
+        help = CLI_HELP_REGISTRY_MAX_IN_FLIGHT
+    )]
+    pub registry_max_in_flight: Option<usize>,
 
     #[arg(long, short = 'q')]
     pub quiet: bool,
 }
 
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Args, Debug)]
 pub struct CiArgs {
     #[arg(long)]
@@ -98,39 +95,75 @@ pub struct CiArgs {
     #[arg(long)]
     pub omit_optional: bool,
 
-    #[arg(long)]
+    #[arg(long, help = CLI_HELP_ALLOW_SCRIPTS)]
     pub allow_scripts: bool,
-
-    #[arg(long)]
-    pub no_scripts: bool,
 
     #[arg(long)]
     pub dry_run: bool,
 
-    #[arg(long, default_value = "text", value_enum)]
+    #[arg(long)]
+    pub post_verify: bool,
+
+    #[arg(long)]
+    pub init_lockfile: bool,
+
+    #[arg(long, default_value = CLI_ARG_DEFAULT_OUTPUT_FORMAT, value_enum)]
     pub format: OutputFormat,
 
-    #[arg(long, default_value = "sentinel-report.json")]
+    #[arg(long, default_value = CLI_ARG_DEFAULT_REPORT_PATH)]
     pub report: PathBuf,
 
-    #[arg(long, default_value = ".")]
+    #[arg(long, default_value = CLI_ARG_DEFAULT_CWD)]
     pub cwd: PathBuf,
+
+    #[arg(long, value_name = CLI_ARG_VALUE_NAME_PACKAGE_MANAGER)]
+    pub package_manager: Option<String>,
 
     #[arg(long, default_value_t = CI_REGISTRY_TIMEOUT_MS)]
     pub timeout: u64,
+
+    #[arg(
+        long,
+        value_name = CLI_ARG_VALUE_NAME_POSITIVE_INTEGER,
+        value_parser = parse_positive_usize,
+        help = CLI_HELP_REGISTRY_MAX_IN_FLIGHT
+    )]
+    pub registry_max_in_flight: Option<usize>,
 
     #[arg(long, short = 'q')]
     pub quiet: bool,
 }
 
 #[derive(Args, Debug)]
-pub struct ReportArgs {
-    #[arg(value_name = "PACKAGE[@VERSION]")]
-    pub package: String,
+pub struct HistoryArgs {
+    #[arg(long, value_name = CLI_ARG_VALUE_NAME_TIMESTAMP_RANGE, value_parser = parse_rfc3339_timestamp)]
+    pub from: String,
+
+    #[arg(long, value_name = CLI_ARG_VALUE_NAME_TIMESTAMP_RANGE, value_parser = parse_rfc3339_timestamp)]
+    pub to: String,
 
     #[arg(long)]
-    pub evidence: Option<String>,
+    pub package: Option<String>,
 
-    #[arg(long, default_value = "suspicious activity")]
-    pub reason: String,
+    #[arg(long, requires = "package")]
+    pub version: Option<String>,
+
+    #[arg(long)]
+    pub project: Option<PathBuf>,
+
+    #[arg(long, value_name = CLI_ARG_VALUE_NAME_PACKAGE_MANAGER)]
+    pub package_manager: Option<String>,
+
+    #[arg(long, default_value = CLI_ARG_DEFAULT_OUTPUT_FORMAT, value_enum)]
+    pub format: HistoryOutputFormat,
+
+    #[arg(long, default_value = CLI_ARG_DEFAULT_CWD)]
+    pub cwd: PathBuf,
+
+    #[arg(long, short = 'q')]
+    pub quiet: bool,
 }
+
+#[cfg(test)]
+#[path = "../../tests/internal/command_args_tests.rs"]
+mod tests;

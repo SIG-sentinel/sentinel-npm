@@ -32,33 +32,6 @@ test("strict mode blocks PATH fallback when managed binary is unavailable", () =
   });
 
   assert.equal(result.status, 1);
-  assert.match(result.stderr, /strict mode blocks unverified fallback binaries/i);
+  assert.match(result.stderr, /strict mode requires a verified|no checksum-verified/i);
   assert.equal(fs.existsSync(markerPath), false);
-});
-
-test("unsafe override allows unverified fallback only when explicitly enabled", () => {
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "sentinel-wrapper-"));
-  const markerPath = path.join(tmpDir, "marker.txt");
-  const fakeSentinel = path.join(tmpDir, "sentinel");
-  const sentinelJs = path.resolve(__dirname, "../bin/sentinel.js");
-
-  writeExecutable(
-    fakeSentinel,
-    `#!/usr/bin/env sh\necho allowed > "${markerPath}"\nexit 0\n`
-  );
-
-  const result = spawnSync(process.execPath, [sentinelJs, "--version"], {
-    cwd: tmpDir,
-    env: {
-      ...process.env,
-      SENTINEL_SKIP_DOWNLOAD: "1",
-      SENTINEL_ALLOW_UNVERIFIED_FALLBACK: "1",
-      SENTINEL_BIN: fakeSentinel,
-      PATH: `${tmpDir}${path.delimiter}${process.env.PATH || ""}`,
-    },
-    encoding: "utf8",
-  });
-
-  assert.equal(result.status, 0);
-  assert.equal(fs.existsSync(markerPath), true);
 });

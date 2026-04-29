@@ -1,5 +1,5 @@
 pub const UNVERIFIABLE_CACHE_TTL_SECS: i64 = 30;
-pub const CLEAN_CACHE_TTL_SECS: i64 = 3600;
+pub const CLEAN_CACHE_TTL_SECS: i64 = 300;
 
 pub const SQL_DELETE_CACHE_BY_KEY: &str = "DELETE FROM cache WHERE key = ?1";
 pub const SQL_SELECT_CACHE_BY_KEY: &str =

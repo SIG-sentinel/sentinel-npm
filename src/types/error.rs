@@ -1,5 +1,7 @@
 use thiserror::Error;
 
+use crate::constants::render_template;
+
 #[derive(Debug, Error)]
 pub enum SentinelError {
     #[error(
@@ -47,4 +49,8 @@ impl From<reqwest::Error> for SentinelError {
             _ => Self::Http(error.to_string()),
         }
     }
+}
+
+pub fn templated_http_error(template: &str, template_args: &[String]) -> SentinelError {
+    SentinelError::Http(render_template(template, template_args))
 }

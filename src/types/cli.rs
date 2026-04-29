@@ -1,7 +1,7 @@
 use clap::{Parser, Subcommand};
 
 use crate::constants::CLI_LONG_ABOUT;
-use crate::types::{CheckArgs, CiArgs, InstallArgs, ReportArgs};
+use crate::types::{ArtifactStore, CheckArgs, CiArgs, HistoryArgs, InstallArgs};
 
 #[derive(Parser, Debug)]
 #[command(
@@ -11,6 +11,15 @@ use crate::types::{CheckArgs, CiArgs, InstallArgs, ReportArgs};
     long_about = CLI_LONG_ABOUT
 )]
 pub struct Cli {
+    #[arg(
+        long,
+        global = true,
+        value_enum,
+        default_value = "auto",
+        value_name = "memory|spool|auto"
+    )]
+    pub artifact_store: ArtifactStore,
+
     #[command(subcommand)]
     pub command: Commands,
 }
@@ -20,5 +29,5 @@ pub enum Commands {
     Check(CheckArgs),
     Install(InstallArgs),
     Ci(CiArgs),
-    Report(ReportArgs),
+    History(HistoryArgs),
 }

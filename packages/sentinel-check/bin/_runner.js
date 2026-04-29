@@ -13,6 +13,9 @@ const PACKAGE_MANIFEST = require(path.join(PACKAGE_ROOT, "package.json"));
 const DOWNLOAD_TIMEOUT_MS = 30_000;
 const EXIT_FAILURE = 1;
 const LOCAL_HTTP_HOSTS = new Set(["127.0.0.1", "localhost"]);
+const CHECKSUM_FILENAME = "checksums.txt";
+const VERSION_PATTERN = /^v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
+const CHECKSUM_PATTERN = /^([a-f0-9]{64})\s+\*?(.+)$/i;
 const PLATFORM_ASSETS = Object.freeze({
   "linux-x64": { assetName: "sentinel-linux-x64", binaryName: "sentinel" },
   "darwin-x64": { assetName: "sentinel-darwin-x64", binaryName: "sentinel" },
@@ -20,9 +23,10 @@ const PLATFORM_ASSETS = Object.freeze({
   "win32-x64": { assetName: "sentinel-windows-x64.exe", binaryName: "sentinel.exe" },
 });
 const STRICT_MODE_FALLBACK_MESSAGES = [
-  "sentinel: strict mode blocks unverified fallback binaries.",
+  "sentinel: strict mode requires a verified, managed binary.",
   "sentinel: no checksum-verified managed binary is available.",
-  "sentinel: to bypass for local debugging only, set SENTINEL_ALLOW_UNVERIFIED_FALLBACK=1.",
+  "sentinel: install Sentinel via: npm install --save-dev @sentinel/sentinel",
+  "sentinel: or set SENTINEL_BIN=/absolute/path/to/verified/binary",
 ];
 const NO_BINARY_FOUND_MESSAGES = [
   "sentinel: could not find the Sentinel binary.",
@@ -33,9 +37,12 @@ const NO_BINARY_FOUND_MESSAGES = [
 
 function resolveVersion() {
   const requested = process.env.SENTINEL_VERSION || PACKAGE_MANIFEST.version;
-  const raw = requested.startsWith("v") ? requested : `v${requested}`;
+  const hasVersionPrefix = requested.startsWith("v");
+  const raw = hasVersionPrefix ? requested : `v${requested}`;
 
-  if (!/^v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(raw)) {
+  const isValidVersion = VERSION_PATTERN.test(raw);
+
+  if (!isValidVersion) {
     throw new Error(`SENTINEL_VERSION "${raw}" is not a valid version (expected vX.Y.Z)`);
   }
 
@@ -43,26 +50,23 @@ function resolveVersion() {
 }
 
 function normalizeRepository(repository) {
-  if (!repository) {
-    return null;
-  }
+  if (!repository) return null;
 
   const raw = typeof repository === "string" ? repository : repository.url;
-  if (!raw) {
-    return null;
-  }
+
+  if (!raw) return null;
 
   const trimmed = raw.replace(/^git\+/, "").replace(/\.git$/, "");
   const httpsMatch = trimmed.match(/github\.com[/:]([^/]+\/[^/]+)$/);
-  if (httpsMatch) {
-    return httpsMatch[1];
-  }
+
+  if (httpsMatch) return httpsMatch[1];
 
   return null;
 }
 
 function resolveReleaseRepo() {
   const unsafeOverrideAllowed = process.env.SENTINEL_ALLOW_UNSAFE_RELEASE_OVERRIDE === "1";
+
   if (unsafeOverrideAllowed && process.env.SENTINEL_RELEASE_REPO) {
     return process.env.SENTINEL_RELEASE_REPO;
   }
@@ -73,41 +77,39 @@ function resolveReleaseRepo() {
 function resolveBaseUrl() {
   const override = process.env.SENTINEL_RELEASE_BASE_URL;
   const unsafeOverrideAllowed = process.env.SENTINEL_ALLOW_UNSAFE_RELEASE_OVERRIDE === "1";
-  if (override && unsafeOverrideAllowed) {
-    return override.replace(/\/$/, "");
-  }
+
+  if (override && unsafeOverrideAllowed) return override.replace(/\/$/, "");
 
   const repo = resolveReleaseRepo();
   const version = resolveVersion();
-  if (!repo) {
-    return null;
-  }
+
+  if (!repo) return null;
 
   return `https://github.com/${repo}/releases/download/${version}`;
 }
 
 function resolvePlatformAsset() {
   const platformKey = `${process.platform}-${process.arch}`;
+
   return PLATFORM_ASSETS[platformKey] || null;
 }
 
 function resolveCacheDir() {
   const explicit = process.env.SENTINEL_CACHE_DIR;
-  if (explicit) {
-    return explicit;
-  }
+
+  if (explicit) return explicit;
 
   const windowsCacheBase = process.env.LOCALAPPDATA || os.homedir();
   const unixCacheBase = process.env.XDG_CACHE_HOME || path.join(os.homedir(), ".cache");
   const cacheBase = process.platform === "win32" ? windowsCacheBase : unixCacheBase;
+
   return path.join(cacheBase, "sentinel", "bin");
 }
 
 function resolveManagedBinaryPath() {
   const platformAsset = resolvePlatformAsset();
-  if (!platformAsset) {
-    return null;
-  }
+
+  if (!platformAsset) return null;
 
   return path.join(resolveCacheDir(), resolveVersion(), platformAsset.assetName);
 }
@@ -119,25 +121,18 @@ function resolveCandidates() {
   return [
     fromEnv,
     path.resolve(cwd, "target/release/sentinel"),
-    path.resolve(cwd, "target/debug/sentinel"),
-    path.resolve(__dirname, "../../../target/release/sentinel"),
-    path.resolve(__dirname, "../../../target/debug/sentinel")
+    path.resolve(cwd, "target/debug/sentinel")
   ].filter(Boolean);
 }
 
 function canUseBinary(candidate) {
-  if (!candidate.includes("/")) {
-    return true;
-  }
+  if (!candidate.includes("/")) return true;
+
   return fs.existsSync(candidate);
 }
 
 function shouldSkipDownload() {
   return process.env.SENTINEL_SKIP_DOWNLOAD === "1";
-}
-
-function allowUnverifiedFallback() {
-  return process.env.SENTINEL_ALLOW_UNVERIFIED_FALLBACK === "1";
 }
 
 function printLines(lines) {
@@ -147,34 +142,32 @@ function printLines(lines) {
 }
 
 function resolveDownloadClient(parsedUrl) {
-  if (parsedUrl.protocol === "https:") {
-    return https;
-  }
+  const isHttps = parsedUrl.protocol === "https:";
 
-  const isAllowedLocalHttp = parsedUrl.protocol === "http:" && LOCAL_HTTP_HOSTS.has(parsedUrl.hostname);
-  if (isAllowedLocalHttp) {
-    return http;
-  }
+  if (isHttps) return https;
+
+  const isHttp = parsedUrl.protocol === "http:";
+  const isLocalHost = LOCAL_HTTP_HOSTS.has(parsedUrl.hostname);
+  const isAllowedLocalHttp = isHttp && isLocalHost;
+
+  if (isAllowedLocalHttp) return http;
 
   return null;
 }
 
 function trySpawnAndExit(command, commandArgs) {
   const result = spawnSync(command, commandArgs, { stdio: "inherit" });
-  if (result.error) {
-    return false;
-  }
+
+  if (result.error) return false;
 
   process.exit(result.status ?? EXIT_FAILURE);
 }
 
 function tryCandidateAndExit(candidate, args) {
   const result = spawnSync(candidate, args, { stdio: "inherit" });
-
   const isMissingBinary = result.error?.code === "ENOENT";
-  if (isMissingBinary) {
-    return false;
-  }
+
+  if (isMissingBinary) return false;
 
   if (result.error) {
     console.error(`sentinel: failed to execute '${candidate}': ${result.error.message}`);
@@ -187,33 +180,51 @@ function tryCandidateAndExit(candidate, args) {
 const MAX_REDIRECTS = 3;
 
 function fetchBuffer(url, redirectCount = 0) {
-  return new Promise((resolve, reject) => {
+  const promise = new Promise((resolve, reject) => {
     const parsedUrl = new URL(url);
     const client = resolveDownloadClient(parsedUrl);
 
     if (!client) {
       reject(new Error(`unsupported download protocol for ${url}`));
+
       return;
     }
 
     const request = client.get(parsedUrl, { timeout: DOWNLOAD_TIMEOUT_MS }, (response) => {
-      if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+      const statusCode = response.statusCode ?? 0;
+      const isRedirectStatus = statusCode >= 300 && statusCode < 400;
+      const hasRedirectLocation = response.headers.location != null;
+      const shouldFollowRedirect = isRedirectStatus && hasRedirectLocation;
+
+      if (shouldFollowRedirect) {
         response.resume();
-        if (redirectCount >= MAX_REDIRECTS) {
+
+        const reachedRedirectLimit = redirectCount >= MAX_REDIRECTS;
+
+        if (reachedRedirectLimit) {
           reject(new Error(`too many redirects (>${MAX_REDIRECTS}) for ${url}`));
+
           return;
         }
-        resolve(fetchBuffer(response.headers.location, redirectCount + 1));
+
+        const nextLocation = response.headers.location;
+
+        resolve(fetchBuffer(nextLocation, redirectCount + 1));
+
         return;
       }
 
-      if (response.statusCode !== 200) {
+      const isSuccessStatus = statusCode === 200;
+
+      if (!isSuccessStatus) {
         response.resume();
-        reject(new Error(`download failed with status ${response.statusCode} for ${url}`));
+        reject(new Error(`download failed with status ${statusCode} for ${url}`));
+
         return;
       }
 
       const chunks = [];
+
       response.on("data", (chunk) => chunks.push(chunk));
       response.on("end", () => resolve(Buffer.concat(chunks)));
     });
@@ -224,6 +235,8 @@ function fetchBuffer(url, redirectCount = 0) {
 
     request.on("error", reject);
   });
+
+  return promise;
 }
 
 function sha256(buffer) {
@@ -235,115 +248,117 @@ function parseChecksums(text) {
 
   for (const line of text.split(/\r?\n/)) {
     const trimmed = line.trim();
-    if (!trimmed) {
-      continue;
-    }
+    const isEmptyLine = !trimmed;
 
-    const match = trimmed.match(/^([a-f0-9]{64})\s+\*?(.+)$/i);
-    if (!match) {
-      continue;
-    }
+    if (isEmptyLine) continue;
 
-    entries.set(match[2].trim(), match[1].toLowerCase());
+    const match = trimmed.match(CHECKSUM_PATTERN);
+    const isValidChecksumLine = match != null;
+
+    if (!isValidChecksumLine) continue;
+
+    const filename = match[2].trim();
+    const hash = match[1].toLowerCase();
+
+    entries.set(filename, hash);
   }
 
   return entries;
 }
 
 async function ensureManagedBinary() {
-  if (shouldSkipDownload()) {
-    return null;
-  }
+  const shouldSkip = shouldSkipDownload();
+
+  if (shouldSkip) return null;
 
   const platformAsset = resolvePlatformAsset();
   const baseUrl = resolveBaseUrl();
   const managedBinary = resolveManagedBinaryPath();
+  const hasPlatform = platformAsset != null;
+  const hasUrl = baseUrl != null;
+  const hasPath = managedBinary != null;
+  const hasAllRequirements = hasPlatform && hasUrl && hasPath;
 
-  if (!platformAsset || !baseUrl || !managedBinary) {
-    return null;
-  }
+  if (!hasAllRequirements) return null;
 
-  if (fs.existsSync(managedBinary)) {
-    return managedBinary;
-  }
+  const alreadyExists = fs.existsSync(managedBinary);
+
+  if (alreadyExists) return managedBinary;
 
   const targetDir = path.dirname(managedBinary);
+
   fs.mkdirSync(targetDir, { recursive: true });
 
-  const checksumsUrl = `${baseUrl}/checksums.txt`;
+  const checksumsUrl = `${baseUrl}/${CHECKSUM_FILENAME}`;
   const assetUrl = `${baseUrl}/${platformAsset.assetName}`;
+  const version = resolveVersion();
 
-  process.stderr.write(`sentinel: downloading ${platformAsset.assetName} (${resolveVersion()})\n`);
+  process.stderr.write(`sentinel: downloading ${platformAsset.assetName} (${version})\n`);
 
   const checksumData = await fetchBuffer(checksumsUrl);
   const checksumMap = parseChecksums(checksumData.toString("utf8"));
   const expectedChecksum = checksumMap.get(platformAsset.assetName);
+  const checksumFound = expectedChecksum != null;
 
-  if (!expectedChecksum) {
-    throw new Error(`checksum for ${platformAsset.assetName} not found in checksums.txt`);
+  if (!checksumFound) {
+    throw new Error(`checksum for ${platformAsset.assetName} not found in ${CHECKSUM_FILENAME}`);
   }
 
   const binaryData = await fetchBuffer(assetUrl);
   const actualChecksum = sha256(binaryData);
-  if (actualChecksum !== expectedChecksum) {
+  const checksumMatches = actualChecksum === expectedChecksum;
+
+  if (!checksumMatches) {
     throw new Error(`checksum mismatch for ${platformAsset.assetName}`);
   }
 
   const tempPath = `${managedBinary}.tmp`;
+
   fs.writeFileSync(tempPath, binaryData);
-  if (process.platform !== "win32") {
-    fs.chmodSync(tempPath, 0o700);
-  }
+
+  const isNotWindows = process.platform !== "win32";
+
+  if (isNotWindows) fs.chmodSync(tempPath, 0o700);
+
   fs.renameSync(tempPath, managedBinary);
+
   return managedBinary;
 }
 
 async function runSentinel(args) {
   try {
     const managedBinary = await ensureManagedBinary();
-    if (managedBinary) {
+    const hasManagedBinary = managedBinary != null;
+
+    if (hasManagedBinary) {
       const result = spawnSync(managedBinary, args, { stdio: "inherit" });
-      if (result.error) {
-        console.error(`sentinel: failed to execute downloaded binary: ${result.error.message}`);
+      const hasError = result.error != null;
+
+      if (hasError) {
+        const errorMsg = `sentinel: failed to execute downloaded binary: ${result.error.message}`;
+
+        console.error(errorMsg);
         process.exit(EXIT_FAILURE);
       }
 
-      process.exit(result.status ?? EXIT_FAILURE);
+      const exitCode = result.status ?? EXIT_FAILURE;
+      process.exit(exitCode);
     }
   } catch (error) {
     console.error(`sentinel: ${error.message}`);
     process.exit(EXIT_FAILURE);
   }
 
-  if (!allowUnverifiedFallback()) {
-    printLines(STRICT_MODE_FALLBACK_MESSAGES);
-    process.exit(EXIT_FAILURE);
-  }
-
   const candidates = resolveCandidates();
-
   for (const candidate of candidates) {
-    if (!canUseBinary(candidate)) {
-      continue;
-    }
+    if (!canUseBinary(candidate)) continue;
 
-    if (!tryCandidateAndExit(candidate, args)) {
-      continue;
-    }
+    const success = tryCandidateAndExit(candidate, args);
+
+    if (!success) continue;
   }
 
-  if (trySpawnAndExit("sentinel", args)) {
-    return;
-  }
-
-  const cargoFile = path.resolve(process.cwd(), "Cargo.toml");
-  if (fs.existsSync(cargoFile)) {
-    if (trySpawnAndExit("cargo", ["run", "--", ...args])) {
-      return;
-    }
-  }
-
-  printLines(NO_BINARY_FOUND_MESSAGES);
+  printLines(STRICT_MODE_FALLBACK_MESSAGES);
   process.exit(EXIT_FAILURE);
 }
 
