@@ -1,10 +1,9 @@
 pub const OUTPUT_STATUS_ALL_CLEAN: &str = "✓ all clean";
 pub const OUTPUT_STATUS_WARNINGS: &str = "⚠ warnings";
 pub const OUTPUT_STATUS_BLOCKED: &str = "✗ blocked";
-pub const OUTPUT_SUMMARY_LINE_TEMPLATE: &str =
-    "  {}  total: {}  clean: {}  unverifiable: {}  compromised: {}";
+pub const OUTPUT_SUMMARY_LINE_TEMPLATE: &str = "  {}  total: {}  clean: {}  unverifiable(blocking): {}  provenance(warning): {}  compromised: {}";
 pub const OUTPUT_PROVENANCE_SUMMARY_TEMPLATE: &str =
-    "  provenance: trusted={}  warning={}  inconsistent={}  coverage={}%  availability={}%";
+    "  provenance: trusted={}  warning={}  inconsistent={}  coverage={}  availability={}";
 pub const OUTPUT_PROVENANCE_MISSING_SUPPRESSED_TEMPLATE: &str =
     "  ... +{} packages without provenance hidden (showing top {})";
 
@@ -42,7 +41,7 @@ pub const OUTPUT_JSON_SERIALIZATION_ERROR_TEMPLATE: &str =
 pub const OUTPUT_GITHUB_SUMMARY_COMPROMISED_TEMPLATE: &str =
     "::error title=sentinel-summary::sentinel found {} compromised package(s)";
 pub const OUTPUT_GITHUB_SUMMARY_UNVERIFIABLE_TEMPLATE: &str =
-    "::notice title=sentinel-summary::sentinel: {} package(s) could not be verified";
+    "::notice title=sentinel-summary::sentinel: blocking unverifiable={}  provenance warning={}";
 pub const OUTPUT_GITHUB_SUMMARY_CLEAN_TEMPLATE: &str =
     "::notice title=sentinel-summary::sentinel: all {} packages verified clean";
 
@@ -111,8 +110,7 @@ pub const OUTPUT_GITHUB_LOCKFILE_REF: &str = "lockfile";
 pub const GITHUB_PROVENANCE_MISSING_PREVIEW_COUNT: usize = 5;
 pub const OUTPUT_GITHUB_ERROR_FORMAT: &str = "::error title={},file={}::{} — {}";
 pub const OUTPUT_XML_HEADER: &str = r#"<?xml version="1.0" encoding="UTF-8"?>"#;
-pub const OUTPUT_XML_TESTSUITES: &str =
-    r#"<testsuites name="sentinel" tests="{}" errors="{}" failures="0" warnings="{}">"#;
+pub const OUTPUT_XML_TESTSUITES: &str = r#"<testsuites name="sentinel" tests="{}" errors="{}" failures="0" warnings="{}" sentinel_blocking_unverifiable="{}" sentinel_provenance_warnings="{}">"#;
 pub const OUTPUT_XML_TESTSUITE: &str =
     r#"  <testsuite name="supply-chain-integrity" tests="{}" errors="{}">"#;
 pub const OUTPUT_XML_TESTCASE_CLEAN: &str =

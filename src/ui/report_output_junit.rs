@@ -36,10 +36,19 @@ fn print_compromised_testcase(escaped_package_name: &str, detail: &str) {
 
 pub(super) fn print_junit(report: &Report) {
     let errors = report.summary.compromised;
-    let warnings = report.summary.unverifiable;
+    let provenance_warnings = report.summary.provenance_summary.provenance_missing_count;
+    let blocking_unverifiable = report
+        .summary
+        .unverifiable
+        .saturating_sub(provenance_warnings);
     let total = report.summary.total;
-    let testsuites_template_args =
-        vec![total.to_string(), errors.to_string(), warnings.to_string()];
+    let testsuites_template_args = vec![
+        total.to_string(),
+        errors.to_string(),
+        provenance_warnings.to_string(),
+        blocking_unverifiable.to_string(),
+        provenance_warnings.to_string(),
+    ];
 
     let testsuite_template_args = vec![total.to_string(), errors.to_string()];
 

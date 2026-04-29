@@ -72,6 +72,11 @@ fn print_provenance_missing_summary(packages: &[String]) {
 fn resolve_summary_template_and_count(report: &Report) -> (&'static str, u32) {
     let has_compromised_findings = report.summary.compromised > ZERO_FINDINGS;
     let has_unverifiable_findings = report.summary.unverifiable > ZERO_FINDINGS;
+    let provenance_warning_count = report.summary.provenance_summary.provenance_missing_count;
+    let blocking_unverifiable_count = report
+        .summary
+        .unverifiable
+        .saturating_sub(provenance_warning_count);
 
     match (has_compromised_findings, has_unverifiable_findings) {
         (true, _) => (
@@ -80,15 +85,23 @@ fn resolve_summary_template_and_count(report: &Report) -> (&'static str, u32) {
         ),
         (false, true) => (
             OUTPUT_GITHUB_SUMMARY_UNVERIFIABLE_TEMPLATE,
-            report.summary.unverifiable,
+            blocking_unverifiable_count,
         ),
         (false, false) => (OUTPUT_GITHUB_SUMMARY_CLEAN_TEMPLATE, report.summary.clean),
     }
 }
 
 fn print_summary(report: &Report) {
+    let provenance_warning_count = report.summary.provenance_summary.provenance_missing_count;
     let (summary_template, summary_count) = resolve_summary_template_and_count(report);
-    let summary_template_args = vec![summary_count.to_string()];
+    let summary_template_args = if summary_template == OUTPUT_GITHUB_SUMMARY_UNVERIFIABLE_TEMPLATE {
+        vec![
+            summary_count.to_string(),
+            provenance_warning_count.to_string(),
+        ]
+    } else {
+        vec![summary_count.to_string()]
+    };
 
     print_rendered_template(summary_template, &summary_template_args);
 }

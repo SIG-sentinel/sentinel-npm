@@ -463,15 +463,24 @@ pub(super) fn print_summary_line(params: PrintSummaryLineParams<'_>) {
     let has_unverifiable_packages = summary.unverifiable > ZERO_COUNT;
     let has_clean_exit_without_issues = !has_compromised_packages && !has_unverifiable_packages;
 
+    let provenance_warning_count = summary.provenance_summary.provenance_missing_count;
+    let blocking_unverifiable_count = summary
+        .unverifiable
+        .saturating_sub(provenance_warning_count);
+
     let status_text = match summary.exit_code {
         ZERO_EXIT_CODE if has_clean_exit_without_issues => OUTPUT_STATUS_ALL_CLEAN.green().bold(),
         ZERO_EXIT_CODE => OUTPUT_STATUS_WARNINGS.yellow().bold(),
         _ => OUTPUT_STATUS_BLOCKED.red().bold(),
     };
 
-    let unverifiable_count_text = match summary.unverifiable {
-        ZERO_COUNT => summary.unverifiable.to_string().normal(),
-        _ => summary.unverifiable.to_string().yellow(),
+    let blocking_unverifiable_count_text = match blocking_unverifiable_count {
+        ZERO_COUNT => blocking_unverifiable_count.to_string().normal(),
+        _ => blocking_unverifiable_count.to_string().yellow(),
+    };
+    let provenance_warning_count_text = match provenance_warning_count {
+        ZERO_COUNT => provenance_warning_count.to_string().normal(),
+        _ => provenance_warning_count.to_string().yellow(),
     };
     let compromised_count_text = match summary.compromised {
         ZERO_COUNT => summary.compromised.to_string().normal(),
@@ -481,7 +490,8 @@ pub(super) fn print_summary_line(params: PrintSummaryLineParams<'_>) {
         status_text.to_string(),
         summary.total.to_string(),
         summary.clean.to_string().green().to_string(),
-        unverifiable_count_text.to_string(),
+        blocking_unverifiable_count_text.to_string(),
+        provenance_warning_count_text.to_string(),
         compromised_count_text.to_string(),
     ];
     let summary_line = render_template(OUTPUT_SUMMARY_LINE_TEMPLATE, &summary_line_template_args);
