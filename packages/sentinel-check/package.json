@@ -1,6 +1,6 @@
 {
   "name": "sentinel-check",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "description": "Security gate for npm, yarn and pnpm: verifies lockfile integrity and tarball hashes before installation",
   "license": "MIT",
   "repository": {

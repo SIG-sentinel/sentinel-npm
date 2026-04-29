@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-04-28
+
+### Added
+
+- Per-command registry concurrency override via `--registry-max-in-flight` for `check`, `ci`, and `install`.
+- Relative timestamp parsing for `history`, including inputs like `now` and `7 days ago`.
+- Candidate resolution flow for `install`, allowing package specs without an explicit pinned version when resolving from the lockfile graph.
+
+### Changed
+
+- `install` internals were split into focused modules for lockfile preparation, policy resolution, history writing, source installation, and post-verify orchestration.
+- `check` orchestration was reduced into smaller helpers, keeping behavior intact while making command flow easier to maintain.
+- CLI parsing/help text was centralized so command argument validation and user-facing parser messages stay consistent across commands.
+
+### Fixed
+
+- Post-verify fingerprint comparison now supports tarballs whose content is not rooted under the canonical `package/` directory.
+- Successful `ci` and `install` post-verify flows now write history entries without runtime panics, while failed post-verify runs correctly skip ledger writes.
+- Registry request configuration now consistently respects CLI overrides before falling back to environment defaults.
+
+### Tested
+
+- Strict `cargo clippy --all-targets --all-features -- -D warnings` passes cleanly.
+- `cargo test -q` passes.
+- Command-option smoke coverage passes for the release binary.
+
 ## [2.0.1] - 2026-04-27
 
 ### Changed

@@ -64,6 +64,97 @@ yarn.lock / pnpm-lock.yaml / package-lock.json
 > Security default in v2+: lifecycle scripts are blocked by default in `sentinel ci` and `sentinel install`.
 > Use `--allow-scripts` only when your project requires lifecycle hooks.
 
+## CLI reference (flags and advanced features)
+
+This section reflects the current CLI help output.
+
+### Global options (all commands)
+
+| Flag                                     | Description                                                  |
+| ---------------------------------------- | ------------------------------------------------------------ |
+| `--artifact-store <memory\|spool\|auto>` | Chooses where verified tarballs are staged. Default: `auto`. |
+| `-h, --help`                             | Prints help.                                                 |
+| `-V, --version`                          | Prints version.                                              |
+
+### `sentinel check` options
+
+| Flag                                   | Description                                                       |
+| -------------------------------------- | ----------------------------------------------------------------- |
+| `--omit-dev`                           | Skips dev dependencies in verification.                           |
+| `--omit-optional`                      | Skips optional dependencies in verification.                      |
+| `--format <text\|json\|github\|junit>` | Output format (default: `text`).                                  |
+| `--cwd <CWD>`                          | Project directory (default: `.`).                                 |
+| `--package-manager <npm\|yarn\|pnpm>`  | Forces package manager instead of auto-detection.                 |
+| `--timeout <TIMEOUT>`                  | Registry timeout in milliseconds (default: `5000`).               |
+| `--registry-max-in-flight <N>`         | Max concurrent registry requests for this command (CLI override). |
+| `-q, --quiet`                          | Reduces non-essential output.                                     |
+
+### `sentinel ci` options
+
+| Flag                                   | Description                                                                             |
+| -------------------------------------- | --------------------------------------------------------------------------------------- |
+| `--omit-dev`                           | Skips dev dependencies in verification/install flow.                                    |
+| `--omit-optional`                      | Skips optional dependencies in verification/install flow.                               |
+| `--allow-scripts`                      | Enables lifecycle scripts (`preinstall`, `postinstall`, etc.). Default is blocked.      |
+| `--dry-run`                            | Verifies and prepares flow without executing final install step.                        |
+| `--post-verify`                        | After install, validates installed package content against verified registry artifacts. |
+| `--init-lockfile`                      | Initializes/refreshes lockfile in guarded flow when missing or recovery is required.    |
+| `--format <text\|json\|github\|junit>` | Output format (default: `text`).                                                        |
+| `--report <REPORT>`                    | Report path for CI output (default: `sentinel-report.json`).                            |
+| `--cwd <CWD>`                          | Project directory (default: `.`).                                                       |
+| `--package-manager <npm\|yarn\|pnpm>`  | Forces package manager instead of auto-detection.                                       |
+| `--timeout <TIMEOUT>`                  | Registry timeout in milliseconds (default: `10000`).                                    |
+| `--registry-max-in-flight <N>`         | Max concurrent registry requests for this command (CLI override).                       |
+| `-q, --quiet`                          | Reduces non-essential output.                                                           |
+
+### `sentinel install <PACKAGE[@VERSION]>` options
+
+| Flag                                   | Description                                                                             |
+| -------------------------------------- | --------------------------------------------------------------------------------------- |
+| `--allow-scripts`                      | Enables lifecycle scripts (`preinstall`, `postinstall`, etc.). Default is blocked.      |
+| `--dry-run`                            | Resolves/verifies candidate without applying package manager changes.                   |
+| `--post-verify`                        | After install, validates installed package content against verified registry artifacts. |
+| `--format <text\|json\|github\|junit>` | Output format (default: `text`).                                                        |
+| `--cwd <CWD>`                          | Project directory (default: `.`).                                                       |
+| `--package-manager <npm\|yarn\|pnpm>`  | Forces package manager instead of auto-detection.                                       |
+| `--timeout <TIMEOUT>`                  | Registry timeout in milliseconds (default: `5000`).                                     |
+| `--registry-max-in-flight <N>`         | Max concurrent registry requests for this command (CLI override).                       |
+| `-q, --quiet`                          | Reduces non-essential output.                                                           |
+
+### `sentinel history` options
+
+| Flag                                  | Description                                                              |
+| ------------------------------------- | ------------------------------------------------------------------------ |
+| `--from <RFC3339\|RELATIVE>`          | Start time filter. Accepts RFC3339 or relative values like `7 days ago`. |
+| `--to <RFC3339\|RELATIVE>`            | End time filter. Accepts RFC3339 or relative values like `now`.          |
+| `--package <PACKAGE>`                 | Filters history by package name.                                         |
+| `--version <VERSION>`                 | Filters by version (requires `--package`).                               |
+| `--project <PROJECT>`                 | Filters by project path recorded in history events.                      |
+| `--package-manager <npm\|yarn\|pnpm>` | Filters by package manager.                                              |
+| `--format <text\|json>`               | Output format (default: `text`).                                         |
+| `--cwd <CWD>`                         | Project directory (default: `.`).                                        |
+| `-q, --quiet`                         | Reduces non-essential output.                                            |
+
+### Advanced feature notes
+
+1. Artifact store modes:
+   `memory` keeps verified tarballs in memory; `spool` persists verified tarballs to temporary disk artifacts; `auto` (default) starts in memory and falls back to spool when memory budget is exceeded.
+2. Registry concurrency control:
+   CLI flag `--registry-max-in-flight` has highest precedence; if not passed, Sentinel reads `SENTINEL_REGISTRY_MAX_IN_FLIGHT`; if neither is set, the built-in default is used.
+3. Provenance verification:
+   Sentinel performs provenance checks during verification automatically (no separate `provenance verify` command), and provenance fields are included in evidence/report output when available.
+4. Post-verify safety pass:
+   `--post-verify` performs a second integrity pass after install by validating installed content against verified artifacts, useful for extra assurance in CI and release workflows.
+
+### Useful environment variables
+
+| Variable                          | Description                                                        |
+| --------------------------------- | ------------------------------------------------------------------ |
+| `SENTINEL_REGISTRY_MAX_IN_FLIGHT` | Default max concurrent registry requests when CLI flag is not set. |
+| `SENTINEL_HISTORY_PATH`           | Custom path for install history ledger file.                       |
+| `SENTINEL_LOG`                    | Sentinel log level/filter configuration.                           |
+| `RUST_LOG`                        | Rust tracing/log filter override (advanced debugging).             |
+
 ---
 
 ## Get started in 30 seconds
@@ -103,21 +194,21 @@ Good for teams that will use Sentinel daily.
 Standard install to `/usr/local/bin`:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/SIG-sentinel/sentinel-npm/main/scripts/install.sh | sudo sh -s -- --version 2.0.0
+curl -fsSL https://raw.githubusercontent.com/SIG-sentinel/sentinel-npm/main/scripts/install.sh | sudo sh -s -- --version 2.1.0
 ```
 
 Install to user directory:
 
 ```bash
 curl -fsSL -o /tmp/install-sentinel.sh https://raw.githubusercontent.com/SIG-sentinel/sentinel-npm/main/scripts/install.sh
-INSTALL_DIR="$HOME/.local/bin" sh /tmp/install-sentinel.sh --version 2.0.0
+INSTALL_DIR="$HOME/.local/bin" sh /tmp/install-sentinel.sh --version 2.1.0
 ```
 
 Pin a specific version:
 
 ```bash
 curl -fsSL -o /tmp/install-sentinel.sh https://raw.githubusercontent.com/SIG-sentinel/sentinel-npm/main/scripts/install.sh
-sh /tmp/install-sentinel.sh --version 2.0.0
+sh /tmp/install-sentinel.sh --version 2.1.0
 ```
 
 Confirm installation:
@@ -228,31 +319,31 @@ If the workflow may start without a lockfile, use:
 
 ```yaml
 - name: Initialize lockfile and verify dependency integrity
-  run: npx --yes sentinel-check ci --init
+  run: npx --yes sentinel-check ci --init-lockfile
 ```
 
 ### Package manager setup examples
 
 ```yaml
 # npm lockfile
-- run: npx --yes sentinel-check ci --init
+- run: npx --yes sentinel-check ci --init-lockfile
 
 # yarn lockfile
 - run: corepack enable
-- run: npx --yes sentinel-check ci --init
+- run: npx --yes sentinel-check ci --init-lockfile
 
 # pnpm lockfile
 - run: corepack enable
-- run: npx --yes sentinel-check ci --init
+- run: npx --yes sentinel-check ci --init-lockfile
 ```
 
-If your repository already commits a trusted lockfile, prefer plain `sentinel ci` and reserve `--init` for controlled recovery or first-time setup.
+If your repository already commits a trusted lockfile, prefer plain `sentinel ci` and reserve `--init-lockfile` for controlled recovery or first-time setup.
 
 ### GitHub Actions with installed binary
 
 ```yaml
 - name: Install sentinel
-  run: curl -fsSL https://raw.githubusercontent.com/SIG-sentinel/sentinel-npm/main/scripts/install.sh | sudo sh -s -- --version 2.0.0
+  run: curl -fsSL https://raw.githubusercontent.com/SIG-sentinel/sentinel-npm/main/scripts/install.sh | sudo sh -s -- --version 2.1.0
 
 - name: Verify dependency integrity
   run: sentinel ci
@@ -265,7 +356,7 @@ If the workflow needs Sentinel to initialize the lockfile first:
 
 ```yaml
 - name: Initialize lockfile and verify dependency integrity
-  run: sentinel ci --init
+  run: sentinel ci --init-lockfile
 ```
 
 ### Machine-readable output
@@ -277,9 +368,9 @@ sentinel check --format github
 sentinel ci --dry-run --format json --report sentinel-report.json
 ```
 
-If no lockfile is present, use `sentinel ci --init` to let Sentinel create or refresh it in the guarded flow.
+If no lockfile is present, use `sentinel ci --init-lockfile` to let Sentinel create or refresh it in the guarded flow.
 
-The secure order in CI is: commit and review a trusted lockfile when possible, run `sentinel ci` for normal enforcement, and use `sentinel ci --init` only for controlled initialization or recovery.
+The secure order in CI is: commit and review a trusted lockfile when possible, run `sentinel ci` for normal enforcement, and use `sentinel ci --init-lockfile` only for controlled initialization or recovery.
 
 ### Using sentinel alongside npm audit
 
@@ -355,4 +446,4 @@ If these practices are not in place, Sentinel's protection window narrows signif
 | `UNVERIFIABLE` | could not confirm the chain | installation blocked |
 | `COMPROMISED`  | divergence detected         | installation blocked |
 
-If Sentinel prints `dependency cycles detected`, the dependency graph contains circular chains. Sentinel will **continue verification and report cycles as a warning** (not a blocker). This allows you to see package integrity status despite cycles. For a safe first recovery step, remove `node_modules` and rerun `sentinel ci` (or `npx --yes sentinel-check ci`). If lockfile recovery is needed, remove the lockfile and rerun `sentinel ci --init` so Sentinel regenerates it in the guarded flow.
+If Sentinel prints `dependency cycles detected`, the dependency graph contains circular chains. Sentinel will **continue verification and report cycles as a warning** (not a blocker). This allows you to see package integrity status despite cycles. For a safe first recovery step, remove `node_modules` and rerun `sentinel ci` (or `npx --yes sentinel-check ci`). If lockfile recovery is needed, remove the lockfile and rerun `sentinel ci --init-lockfile` so Sentinel regenerates it in the guarded flow.
