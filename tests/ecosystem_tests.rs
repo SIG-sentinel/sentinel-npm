@@ -93,12 +93,13 @@ fn compare_integrity_reports_clean_and_compromised() {
 #[test]
 fn npm_executor_uses_deterministic_clean_install_command() {
     let executor = PackageManagerExecutor::new(PackageManager::Npm);
-    let plan = executor.clean_install_plan(CleanInstallPlanParams {
+    let clean_install_plan_params = CleanInstallPlanParams {
         ignore_scripts: true,
         omit_dev: true,
         omit_optional: true,
         silent_output: true,
-    });
+    };
+    let plan = executor.clean_install_plan(clean_install_plan_params);
 
     assert_eq!(plan.program, "npm");
     assert!(plan.args.contains(&"ci".to_string()));
@@ -110,12 +111,13 @@ fn npm_executor_uses_deterministic_clean_install_command() {
 #[test]
 fn yarn_executor_uses_frozen_lockfile() {
     let executor = PackageManagerExecutor::new(PackageManager::Yarn);
-    let plan = executor.clean_install_plan(CleanInstallPlanParams {
+    let clean_install_plan_params = CleanInstallPlanParams {
         ignore_scripts: false,
         omit_dev: false,
         omit_optional: false,
         silent_output: false,
-    });
+    };
+    let plan = executor.clean_install_plan(clean_install_plan_params);
 
     assert_eq!(plan.program, "yarn");
     assert!(plan.args.contains(&"install".to_string()));
@@ -125,12 +127,13 @@ fn yarn_executor_uses_frozen_lockfile() {
 #[test]
 fn pnpm_executor_uses_frozen_lockfile() {
     let executor = PackageManagerExecutor::new(PackageManager::Pnpm);
-    let plan = executor.clean_install_plan(CleanInstallPlanParams {
+    let clean_install_plan_params = CleanInstallPlanParams {
         ignore_scripts: false,
         omit_dev: false,
         omit_optional: false,
         silent_output: false,
-    });
+    };
+    let plan = executor.clean_install_plan(clean_install_plan_params);
 
     assert_eq!(plan.program, "pnpm");
     assert!(plan.args.contains(&"install".to_string()));
@@ -167,7 +170,7 @@ fn resolve_package_manager_error_is_actionable_without_lockfile() {
     let message = result.expect_err("missing lockfile should return setup guidance");
     assert!(message.contains("package manager auto-detection failed"));
     assert!(message.contains("sentinel check --package-manager npm"));
-    assert!(message.contains("sentinel ci --init"));
+    assert!(message.contains("sentinel ci --init-lockfile"));
 }
 
 #[test]

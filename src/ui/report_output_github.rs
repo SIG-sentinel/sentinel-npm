@@ -1,5 +1,6 @@
 use crate::constants::{
-    OUTPUT_GITHUB_ERROR_FORMAT, OUTPUT_GITHUB_ERROR_TITLE, OUTPUT_GITHUB_LOCKFILE_REF,
+    GITHUB_PROVENANCE_MISSING_PREVIEW_COUNT, OUTPUT_GITHUB_ERROR_FORMAT, OUTPUT_GITHUB_ERROR_TITLE,
+    OUTPUT_GITHUB_LOCKFILE_REF, OUTPUT_GITHUB_PROVENANCE_MISSING_TITLE,
     OUTPUT_GITHUB_SUMMARY_CLEAN_TEMPLATE, OUTPUT_GITHUB_SUMMARY_COMPROMISED_TEMPLATE,
     OUTPUT_GITHUB_SUMMARY_UNVERIFIABLE_TEMPLATE, OUTPUT_GITHUB_WARNING_TITLE,
     UI_GITHUB_WARNING_FORMAT, render_template,
@@ -40,6 +41,34 @@ fn print_unverifiable_annotation(report: &Report, index: usize) {
     print_rendered_template(UI_GITHUB_WARNING_FORMAT, &github_warning_template_args);
 }
 
+fn print_provenance_missing_summary(packages: &[String]) {
+    let total = packages.len();
+
+    if total == 0 {
+        return;
+    }
+
+    let preview = packages
+        .iter()
+        .take(GITHUB_PROVENANCE_MISSING_PREVIEW_COUNT)
+        .map(String::as_str)
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    let suffix = if total > GITHUB_PROVENANCE_MISSING_PREVIEW_COUNT {
+        format!(
+            " (+{} more)",
+            total - GITHUB_PROVENANCE_MISSING_PREVIEW_COUNT
+        )
+    } else {
+        String::new()
+    };
+
+    println!(
+        "::notice title={OUTPUT_GITHUB_PROVENANCE_MISSING_TITLE},file={OUTPUT_GITHUB_LOCKFILE_REF}::{total} package(s) lack provenance — {preview}{suffix}",
+    );
+}
+
 fn resolve_summary_template_and_count(report: &Report) -> (&'static str, u32) {
     let has_compromised_findings = report.summary.compromised > ZERO_FINDINGS;
     let has_unverifiable_findings = report.summary.unverifiable > ZERO_FINDINGS;
@@ -65,21 +94,29 @@ fn print_summary(report: &Report) {
 }
 
 pub(super) fn print_github_annotations(report: &Report) {
-    for (index, result) in report.results.iter().enumerate() {
-        let should_print_compromised = matches!(result.verdict, Verdict::Compromised { .. });
+    let mut provenance_missing_packages: Vec<String> = Vec::new();
 
-        if should_print_compromised {
+    for (index, result) in report.results.iter().enumerate() {
+        if matches!(result.verdict, Verdict::Compromised { .. }) {
             print_compromised_annotation(report, index);
+        }
+    }
+
+    for (index, result) in report.results.iter().enumerate() {
+        let Verdict::Unverifiable { .. } = &result.verdict else {
+            continue;
+        };
+
+        if result.is_provenance_missing() {
+            provenance_missing_packages.push(result.package.to_string());
 
             continue;
         }
 
-        let should_print_unverifiable = matches!(result.verdict, Verdict::Unverifiable { .. });
-
-        if should_print_unverifiable {
-            print_unverifiable_annotation(report, index);
-        }
+        print_unverifiable_annotation(report, index);
     }
+
+    print_provenance_missing_summary(&provenance_missing_packages);
 
     print_summary(report);
 }

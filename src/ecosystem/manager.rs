@@ -1,35 +1,19 @@
 use std::path::{Path, PathBuf};
 
 use crate::constants::{
-    CLI_COMMAND_HINT_CI, CLI_COMMAND_HINT_INSTALL, PACKAGE_JSON_FILE, PACKAGE_LOCK_FILE,
-    PARSE_INVALID_PACKAGE_MANAGER_TEMPLATE, PNPM_LOCK_FILE, SETUP_COMMAND_SUGGESTION_TEMPLATE,
-    SETUP_DETECTED_LOCKFILES_TEMPLATE, YARN_LOCK_FILE, render_template,
+    CLI_COMMAND_HINT_CI, CLI_COMMAND_HINT_INSTALL, EMPTY_PACKAGE_MANAGER,
+    MULTIPLE_LOCKFILES_THRESHOLD, NPM_PREFIX_AT, NPM_PREFIX_SPACE, PACKAGE_JSON_FILE,
+    PACKAGE_LOCK_FILE, PACKAGE_MANAGER_FIELD, PACKAGE_MANAGER_NPM, PACKAGE_MANAGER_PNPM,
+    PACKAGE_MANAGER_YARN, PARSE_INVALID_PACKAGE_MANAGER_TEMPLATE, PNPM_LOCK_FILE, PNPM_PREFIX_AT,
+    PNPM_PREFIX_SPACE, SETUP_AUTODETECT_FAILED_MESSAGE, SETUP_COMMAND_SUGGESTION_TEMPLATE,
+    SETUP_DETECTED_LOCKFILES_TEMPLATE, SETUP_EXPLICIT_COMMAND_HEADER,
+    SETUP_NO_LOCKFILE_CONTEXT_MESSAGE, SETUP_NO_LOCKFILE_TIP, SETUP_SCRIPT_BLOCKED_TIP,
+    YARN_LOCK_FILE, YARN_PREFIX_AT, YARN_PREFIX_SPACE, render_template,
 };
 use crate::types::{
     BuildResolveErrorMessageParams, PackageManager, ResolvePackageManagerParams,
     StartsWithManagerPrefixParams,
 };
-
-const PACKAGE_MANAGER_FIELD: &str = "packageManager";
-const EMPTY_PACKAGE_MANAGER: &str = "";
-const NPM_PREFIX_AT: &str = "npm@";
-const NPM_PREFIX_SPACE: &str = "npm ";
-const YARN_PREFIX_AT: &str = "yarn@";
-const YARN_PREFIX_SPACE: &str = "yarn ";
-const PNPM_PREFIX_AT: &str = "pnpm@";
-const PNPM_PREFIX_SPACE: &str = "pnpm ";
-const MULTIPLE_LOCKFILES_THRESHOLD: usize = 1;
-const PACKAGE_MANAGER_NPM: &str = "npm";
-const PACKAGE_MANAGER_YARN: &str = "yarn";
-const PACKAGE_MANAGER_PNPM: &str = "pnpm";
-const SETUP_AUTODETECT_FAILED_MESSAGE: &str = "[setup] package manager auto-detection failed.";
-const SETUP_NO_LOCKFILE_CONTEXT_MESSAGE: &str =
-    "No lockfile found in project root (package-lock.json, yarn.lock, pnpm-lock.yaml).";
-const SETUP_EXPLICIT_COMMAND_HEADER: &str = "Run one command explicitly:";
-const SETUP_NO_LOCKFILE_TIP: &str =
-    "Tip: create a lockfile first (recommended): sentinel ci --init";
-const SETUP_SCRIPT_BLOCKED_TIP: &str =
-    "Tip: lifecycle scripts are blocked by default. Use --allow-scripts only when required.";
 
 const LOCKFILE_MANAGER_MAPPINGS: [(&str, PackageManager); 3] = [
     (PACKAGE_LOCK_FILE, PackageManager::Npm),
@@ -149,6 +133,38 @@ fn suggested_package_managers(project_dir: &Path) -> Vec<PackageManager> {
         .collect()
 }
 
+fn build_lockfile_context(lockfiles: &[&str]) -> String {
+    if lockfiles.is_empty() {
+        SETUP_NO_LOCKFILE_CONTEXT_MESSAGE.to_string()
+    } else {
+        let detected_lockfiles = lockfiles.join(", ");
+        render_template(SETUP_DETECTED_LOCKFILES_TEMPLATE, &[detected_lockfiles])
+    }
+}
+
+fn collect_lockfile_tip_lines(lockfiles: &[&str]) -> Vec<String> {
+    if lockfiles.is_empty() {
+        vec![String::new(), SETUP_NO_LOCKFILE_TIP.to_string()]
+    } else {
+        Vec::new()
+    }
+}
+
+fn should_add_setup_script_tip(command_hint: &str) -> bool {
+    let is_ci_command = command_hint.starts_with(CLI_COMMAND_HINT_CI);
+    let is_install_command = command_hint.starts_with(CLI_COMMAND_HINT_INSTALL);
+
+    is_ci_command || is_install_command
+}
+
+fn collect_script_tip_lines(command_hint: &str) -> Vec<String> {
+    if should_add_setup_script_tip(command_hint) {
+        vec![SETUP_SCRIPT_BLOCKED_TIP.to_string()]
+    } else {
+        Vec::new()
+    }
+}
+
 fn build_resolve_error_message(params: BuildResolveErrorMessageParams<'_>) -> String {
     let BuildResolveErrorMessageParams {
         project_dir,
@@ -156,15 +172,7 @@ fn build_resolve_error_message(params: BuildResolveErrorMessageParams<'_>) -> St
     } = params;
     let lockfiles = detected_lockfiles(project_dir);
     let suggestions = suggested_package_managers(project_dir);
-
-    let mut lockfile_context = SETUP_NO_LOCKFILE_CONTEXT_MESSAGE.to_string();
-
-    if !lockfiles.is_empty() {
-        let detected_lockfiles = lockfiles.join(", ");
-
-        lockfile_context =
-            render_template(SETUP_DETECTED_LOCKFILES_TEMPLATE, &[detected_lockfiles]);
-    }
+    let lockfile_context = build_lockfile_context(&lockfiles);
 
     let mut lines = vec![
         SETUP_AUTODETECT_FAILED_MESSAGE.to_string(),
@@ -181,18 +189,8 @@ fn build_resolve_error_message(params: BuildResolveErrorMessageParams<'_>) -> St
         lines.push(suggestion);
     }
 
-    if lockfiles.is_empty() {
-        lines.push(String::new());
-        lines.push(SETUP_NO_LOCKFILE_TIP.to_string());
-    }
-
-    let is_ci_command = command_hint.starts_with(CLI_COMMAND_HINT_CI);
-    let is_install_command = command_hint.starts_with(CLI_COMMAND_HINT_INSTALL);
-    let should_add_script_tip = is_ci_command || is_install_command;
-
-    if should_add_script_tip {
-        lines.push(SETUP_SCRIPT_BLOCKED_TIP.to_string());
-    }
+    lines.extend(collect_lockfile_tip_lines(&lockfiles));
+    lines.extend(collect_script_tip_lines(command_hint));
 
     lines.join("\n")
 }

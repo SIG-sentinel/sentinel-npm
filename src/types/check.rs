@@ -34,6 +34,13 @@ pub struct EnsureLockfileExistsForCheckParams<'a> {
     pub current_working_directory: &'a Path,
 }
 
+#[derive(Clone, Copy)]
+pub struct LoadCheckSharedStateParams<'a> {
+    pub current_working_directory: &'a Path,
+    pub timeout: u64,
+    pub registry_max_in_flight: Option<usize>,
+}
+
 pub struct PrepareCheckStateParams<'a> {
     pub args: &'a CheckArgs,
     pub manager: super::manager::PackageManager,

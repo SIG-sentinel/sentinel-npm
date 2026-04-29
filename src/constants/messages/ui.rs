@@ -44,4 +44,4 @@ pub const UI_MSG_SERIALIZE_REPORT_FAILED_TEMPLATE: &str =
 
 pub const UI_GITHUB_WARNING_FORMAT: &str = "::warning title={},file={}::{} — {}";
 pub const UI_JUNIT_SYSTEM_OUT_TEMPLATE: &str =
-    "      <system-out>UNVERIFIABLE: {:?} — {}</system-out>";
+    "      <system-out>UNVERIFIABLE: {} — {}</system-out>";

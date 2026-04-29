@@ -3,6 +3,7 @@ use super::*;
 #[test]
 fn test_dependency_tree_empty() {
     let tree = DependencyTree::new();
+
     assert_eq!(tree.nodes.len(), 0);
 }
 
@@ -17,7 +18,9 @@ fn test_dependency_tree_insert() {
         is_direct: false,
         direct_parent: None,
     };
+
     tree.insert(dependency_node);
+
     assert_eq!(tree.nodes.len(), 1);
     assert!(tree.nodes.contains_key(&package_reference.to_string()));
 }

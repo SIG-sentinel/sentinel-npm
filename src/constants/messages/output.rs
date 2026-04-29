@@ -24,8 +24,8 @@ pub const OUTPUT_NEXT_ACTION_GITHUB_CI: &str =
 pub const OUTPUT_NEXT_ACTION_OLD_PACKAGE_DIRECT: &str = "  {} [direct] remove the flagged package(s) from package.json, regenerate the lockfile, then run 'sentinel check'.";
 pub const OUTPUT_NEXT_ACTION_OLD_PACKAGE_TRANSITIVE: &str = "  {} [transitive] run 'npm ls <package>' to find which direct dep pulls it in, then upgrade that dep and run 'sentinel check'.";
 pub const OUTPUT_NEXT_ACTION_LEGACY_SHA1_LOCKFILE: &str = "  {} lockfile uses legacy sha1 integrity entries — delete lockfile, reinstall dependencies, then run 'sentinel ci'.";
-pub const OUTPUT_NEXT_ACTION_LOCKFILE_STALE_DIRECT: &str = "  {} [direct] lockfile is out of sync — prefer 'sentinel ci --init'.\n  {} manual fallback: 'npm install --package-lock-only'. Then run 'sentinel check'.";
-pub const OUTPUT_NEXT_ACTION_LOCKFILE_STALE_TRANSITIVE: &str = "  {} [transitive] lockfile is out of sync — prefer 'sentinel ci --init'.\n  {} manual fallback: 'npm install --package-lock-only'. Then run 'sentinel check'.";
+pub const OUTPUT_NEXT_ACTION_LOCKFILE_STALE_DIRECT: &str = "  {} [direct] lockfile is out of sync — prefer 'sentinel ci --init-lockfile'.\n  {} manual fallback: 'npm install --package-lock-only'. Then run 'sentinel check'.";
+pub const OUTPUT_NEXT_ACTION_LOCKFILE_STALE_TRANSITIVE: &str = "  {} [transitive] lockfile is out of sync — prefer 'sentinel ci --init-lockfile'.\n  {} manual fallback: 'npm install --package-lock-only'. Then run 'sentinel check'.";
 pub const OUTPUT_NEXT_ACTION_REGISTRY_UNAVAILABLE: &str =
     "  {} registry unreachable — retry later, then run 'sentinel check'.";
 pub const OUTPUT_NEXT_ACTION_PROVENANCE_MISSING: &str = "  {} provenance is missing for one or more packages — this is a warning in this phase; track coverage and prefer trusted publishers when possible.";
@@ -68,12 +68,12 @@ pub const OUTPUT_INSTALL_BLOCKED_GUIDANCE_NO_INTEGRITY_TRANSITIVE: &str = "  Thi
     3. Delete the lockfile and reinstall to regenerate it\n\
     4. Re-run: sentinel install <package>@<exact-version>";
 pub const OUTPUT_INSTALL_BLOCKED_GUIDANCE_NOT_IN_LOCKFILE_DIRECT: &str = "  This DIRECT dependency is missing from the lockfile. Regenerate it:\n\
-    sentinel ci --init\n\
+    sentinel ci --init-lockfile\n\
     (manual fallback: npm install --package-lock-only)\n\
     Then re-run: sentinel install <package>@<exact-version>";
 pub const OUTPUT_INSTALL_BLOCKED_GUIDANCE_NOT_IN_LOCKFILE_TRANSITIVE: &str = "  This TRANSITIVE dependency is missing from the lockfile.\n\
     The lockfile may be out of sync with package.json.\n\
-    Run: sentinel ci --init\n\
+    Run: sentinel ci --init-lockfile\n\
     (manual fallback: npm install --package-lock-only)\n\
     Then re-run: sentinel install <package>@<exact-version>";
 
@@ -91,7 +91,7 @@ pub const OUTPUT_INSTALL_BLOCKED_GUIDANCE_LEGACY_SHA1_LOCKFILE: &str = "  This l
 pub const OUTPUT_INSTALL_BLOCKED_GUIDANCE_REGISTRY_UNAVAILABLE: &str = "  Cannot verify — npm registry is unreachable.\n\
     Retry when the registry is available, then re-run: sentinel install <package>@<exact-version>";
 pub const OUTPUT_INSTALL_BLOCKED_GUIDANCE_NOT_IN_LOCKFILE: &str = "  Package not tracked in lockfile. Regenerate lockfile first:\n\
-    sentinel ci --init\n\
+    sentinel ci --init-lockfile\n\
     (manual fallback: npm install --package-lock-only)\n\
     Then re-run: sentinel install <package>@<exact-version>";
 pub const OUTPUT_INSTALL_BLOCKED_GUIDANCE_PROVENANCE_INCONSISTENT: &str = "  Provenance exists but is inconsistent with the downloaded artifact.\n\
@@ -106,7 +106,9 @@ pub const OUTPUT_SYMBOL_WARNING: &str = "⚠";
 pub const OUTPUT_SYMBOL_ERROR: &str = "✗";
 pub const OUTPUT_GITHUB_ERROR_TITLE: &str = "sentinel-compromised";
 pub const OUTPUT_GITHUB_WARNING_TITLE: &str = "sentinel-unverifiable";
+pub const OUTPUT_GITHUB_PROVENANCE_MISSING_TITLE: &str = "sentinel-provenance-missing";
 pub const OUTPUT_GITHUB_LOCKFILE_REF: &str = "lockfile";
+pub const GITHUB_PROVENANCE_MISSING_PREVIEW_COUNT: usize = 5;
 pub const OUTPUT_GITHUB_ERROR_FORMAT: &str = "::error title={},file={}::{} — {}";
 pub const OUTPUT_XML_HEADER: &str = r#"<?xml version="1.0" encoding="UTF-8"?>"#;
 pub const OUTPUT_XML_TESTSUITES: &str =

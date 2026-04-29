@@ -1,7 +1,7 @@
 pub const VERIFIER_DETAIL_NO_LOCKFILE_INTEGRITY: &str = "{} has no integrity field in lockfile. \
      This may mean the lockfile was generated without integrity \
      hashing (npm < 5) or was manually edited. \
-     Prefer regenerating with 'sentinel ci --init'.";
+     Prefer regenerating with 'sentinel ci --init-lockfile'.";
 pub const VERIFIER_DETAIL_REGISTRY_UNREACHABLE: &str = "Cannot verify {}: npm registry unreachable ({}). \
      The lockfile shows integrity: {} — but we cannot confirm \
      this matches what was originally published.";
@@ -17,7 +17,7 @@ pub const VERIFIER_DETAIL_PREDATES_INTEGRITY: &str = "{} predates npm integrity 
      Consider replacing with a maintained fork if available.";
 pub const VERIFIER_DETAIL_LEGACY_SHA1_LOCKFILE: &str = "{} uses legacy lockfile integrity ({}) and sentinel does not validate sha1 entries.\n\
      Regenerate lockfile integrity to sha512:\n\
-     1. Prefer: sentinel ci --init\n\
+     1. Prefer: sentinel ci --init-lockfile\n\
      2. Manual fallback: delete the lockfile and reinstall dependencies\n\
      3. Re-run: sentinel ci";
 pub const VERIFIER_DETAIL_CLEAN_LOCKFILE: &str = "{}: three-source integrity verified. \
