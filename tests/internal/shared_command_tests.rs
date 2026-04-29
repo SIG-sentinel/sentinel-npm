@@ -24,10 +24,12 @@ fn build_lockfile_entry_reuses_integrity_when_entry_exists() {
         },
     );
 
-    let entry = build_lockfile_entry(BuildLockfileEntryParams {
+    let build_lockfile_entry_params = BuildLockfileEntryParams {
         dependency_node: &node,
         lockfile_entries: &lockfile_entries,
-    });
+    };
+
+    let entry = build_lockfile_entry(build_lockfile_entry_params);
 
     assert_eq!(entry.package.to_string(), "left-pad@1.0.0");
     assert_eq!(entry.integrity.as_deref(), Some("sha512-abc"));
@@ -47,10 +49,12 @@ fn build_lockfile_entry_keeps_none_integrity_when_not_found() {
 
     let lockfile_entries: HashMap<String, LockfileEntry> = HashMap::new();
 
-    let entry = build_lockfile_entry(BuildLockfileEntryParams {
+    let build_lockfile_entry_params = BuildLockfileEntryParams {
         dependency_node: &node,
         lockfile_entries: &lockfile_entries,
-    });
+    };
+
+    let entry = build_lockfile_entry(build_lockfile_entry_params);
 
     assert_eq!(entry.package.to_string(), "chalk@5.3.0");
     assert_eq!(entry.integrity, None);

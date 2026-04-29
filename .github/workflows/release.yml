@@ -118,15 +118,9 @@ jobs:
       - name: Sign checksums with EC private key
         shell: bash
         env:
-          SIGNING_KEY_PRIMARY: ${{ secrets.SENTINEL_SIGNING_KEY }}
-          SIGNING_KEY_FALLBACK: ${{ secrets.INSTALL_CHECK }}
+          SENTINEL_SIGNING_KEY: ${{ secrets.INSTALL_CHECK }}
         run: |
           set -euo pipefail
-          SENTINEL_SIGNING_KEY="${SIGNING_KEY_PRIMARY:-$SIGNING_KEY_FALLBACK}"
-          if [ -z "$SENTINEL_SIGNING_KEY" ]; then
-            echo "error: neither SENTINEL_SIGNING_KEY nor INSTALL_CHECK secret is defined" >&2
-            exit 1
-          fi
           echo "$SENTINEL_SIGNING_KEY" > /tmp/signing_key.pem
           openssl dgst -sha256 -sign /tmp/signing_key.pem -out dist/checksums.txt.sig dist/checksums.txt
           rm -f /tmp/signing_key.pem

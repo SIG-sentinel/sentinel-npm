@@ -63,7 +63,7 @@ fn package(name: &str, version: &str) -> HistoryPackageMetadata {
 
 fn seed_ledger(dir: &std::path::Path, pkgs: &[HistoryPackageMetadata]) {
     let lock_hash = Some("sha256-abc".to_string());
-    append_history_events(AppendHistoryEventsParams {
+    let append_history_events_params = AppendHistoryEventsParams {
         current_working_directory: dir,
         package_manager: PackageManager::Npm,
         command: "install",
@@ -71,8 +71,9 @@ fn seed_ledger(dir: &std::path::Path, pkgs: &[HistoryPackageMetadata]) {
         lock_hash_before: &lock_hash,
         lock_hash_after: &lock_hash,
         packages: pkgs,
-    })
-    .expect("seeding ledger should succeed");
+    };
+
+    append_history_events(append_history_events_params).expect("seeding ledger should succeed");
 }
 
 #[test]
@@ -391,7 +392,7 @@ async fn history_uses_sentinel_history_path_env_override() {
             Some(custom_ledger.as_os_str().to_os_string()),
         )],
         async {
-            append_history_events(AppendHistoryEventsParams {
+            let append_history_events_params = AppendHistoryEventsParams {
                 current_working_directory: temp_dir.path(),
                 package_manager: PackageManager::Npm,
                 command: "ci",
@@ -399,8 +400,10 @@ async fn history_uses_sentinel_history_path_env_override() {
                 lock_hash_before: &lock_hash,
                 lock_hash_after: &lock_hash,
                 packages: &pkgs,
-            })
-            .expect("seeding via env override should succeed");
+            };
+
+            append_history_events(append_history_events_params)
+                .expect("seeding via env override should succeed");
 
             let args = HistoryArgs {
                 package: Some("axios".to_string()),

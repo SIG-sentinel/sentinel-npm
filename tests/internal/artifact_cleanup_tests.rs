@@ -39,10 +39,12 @@ fn test_cleanup_directory() {
 
     let temp_dir = tempfile::tempdir().expect("tempdir should be created");
     let test_dir = temp_dir.path().join("test_dir");
+
     fs::create_dir(&test_dir).expect("mkdir should succeed");
     fs::write(test_dir.join("file.txt"), b"test").expect("write should succeed");
 
     let result = cleanup_artifact(&test_dir);
+
     assert!(result.is_ok());
     assert!(!test_dir.exists());
 }

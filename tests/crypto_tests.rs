@@ -42,75 +42,67 @@ fn sha512_empty_string() {
 #[test]
 fn verify_integrity_correct() {
     let fixture = integrity_fixture(TEST_TARBALL_CONTENT);
-    assert_eq!(
-        verify_integrity(VerifyIntegrityParams {
-            sha512_bytes: &fixture.bytes,
-            integrity_field: &fixture.integrity,
-        }),
-        Ok(true)
-    );
+    let verify_integrity_params = VerifyIntegrityParams {
+        sha512_bytes: &fixture.bytes,
+        integrity_field: &fixture.integrity,
+    };
+
+    assert_eq!(verify_integrity(verify_integrity_params), Ok(true));
 }
 
 #[test]
 fn verify_integrity_tampered() {
     let original_fixture = integrity_fixture(ORIGINAL_TARBALL);
     let tampered_fixture = integrity_fixture(TAMPERED_TARBALL);
+    let verify_integrity_params = VerifyIntegrityParams {
+        sha512_bytes: &tampered_fixture.bytes,
+        integrity_field: &original_fixture.integrity,
+    };
 
-    assert_eq!(
-        verify_integrity(VerifyIntegrityParams {
-            sha512_bytes: &tampered_fixture.bytes,
-            integrity_field: &original_fixture.integrity,
-        }),
-        Ok(false)
-    );
+    assert_eq!(verify_integrity(verify_integrity_params), Ok(false));
 }
 
 #[test]
 fn verify_integrity_wrong_prefix() {
     let fixture = wrong_prefix_integrity(SAMPLE_DATA);
-    assert!(
-        verify_integrity(VerifyIntegrityParams {
-            sha512_bytes: &fixture.bytes,
-            integrity_field: &fixture.integrity,
-        })
-        .is_err()
-    );
+    let verify_integrity_params = VerifyIntegrityParams {
+        sha512_bytes: &fixture.bytes,
+        integrity_field: &fixture.integrity,
+    };
+
+    assert!(verify_integrity(verify_integrity_params).is_err());
 }
 
 #[test]
 fn verify_integrity_invalid_base64() {
     let fixture = integrity_fixture(SAMPLE_DATA);
-    assert!(
-        verify_integrity(VerifyIntegrityParams {
-            sha512_bytes: &fixture.bytes,
-            integrity_field: INVALID_BASE64_INTEGRITY,
-        })
-        .is_err()
-    );
+    let verify_integrity_params = VerifyIntegrityParams {
+        sha512_bytes: &fixture.bytes,
+        integrity_field: INVALID_BASE64_INTEGRITY,
+    };
+
+    assert!(verify_integrity(verify_integrity_params).is_err());
 }
 
 #[test]
 fn verify_integrity_empty_field() {
     let fixture = integrity_fixture(SAMPLE_DATA);
-    assert!(
-        verify_integrity(VerifyIntegrityParams {
-            sha512_bytes: &fixture.bytes,
-            integrity_field: "",
-        })
-        .is_err()
-    );
+    let verify_integrity_params = VerifyIntegrityParams {
+        sha512_bytes: &fixture.bytes,
+        integrity_field: "",
+    };
+
+    assert!(verify_integrity(verify_integrity_params).is_err());
 }
 
 #[test]
 fn verify_integrity_multi_algorithm_field_prefers_sha512() {
     let fixture = integrity_fixture(SAMPLE_DATA);
     let multi_algorithm_integrity = format!("sha1-deadbeef {}", fixture.integrity);
+    let verify_integrity_params = VerifyIntegrityParams {
+        sha512_bytes: &fixture.bytes,
+        integrity_field: &multi_algorithm_integrity,
+    };
 
-    assert_eq!(
-        verify_integrity(VerifyIntegrityParams {
-            sha512_bytes: &fixture.bytes,
-            integrity_field: &multi_algorithm_integrity,
-        }),
-        Ok(true)
-    );
+    assert_eq!(verify_integrity(verify_integrity_params), Ok(true));
 }

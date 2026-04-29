@@ -52,10 +52,11 @@ fn keeps_all_events_when_package_version_count_is_below_limit() {
         make_event("e2", "lodash", "4.17.21", "r2", "2026-04-22T10:05:00Z"),
     ];
 
-    let retained = retain_last_n_per_package_version(RetainLastNParams {
+    let retain_last_n_params = RetainLastNParams {
         events: &events,
         max_per_key: 3,
-    });
+    };
+    let retained = retain_last_n_per_package_version(retain_last_n_params);
 
     assert_eq!(retained.len(), 2);
     assert_eq!(retained[0].event_id, "e1");
@@ -72,10 +73,11 @@ fn keeps_only_last_three_events_for_single_package_version_fifo() {
         make_event("e5", "lodash", "4.17.21", "r5", "2026-04-22T10:20:00Z"),
     ];
 
-    let retained = retain_last_n_per_package_version(RetainLastNParams {
+    let retain_last_n_params = RetainLastNParams {
         events: &events,
         max_per_key: 3,
-    });
+    };
+    let retained = retain_last_n_per_package_version(retain_last_n_params);
 
     assert_eq!(retained.len(), 3);
     assert_eq!(retained[0].event_id, "e3");
@@ -94,10 +96,11 @@ fn applies_fifo_independently_per_package_and_version() {
         make_event("a4", "lodash", "4.17.21", "r4", "2026-04-22T10:05:00Z"),
     ];
 
-    let retained = retain_last_n_per_package_version(RetainLastNParams {
+    let retain_last_n_params = RetainLastNParams {
         events: &events,
         max_per_key: 3,
-    });
+    };
+    let retained = retain_last_n_per_package_version(retain_last_n_params);
     let retained_ids: Vec<&str> = retained
         .iter()
         .map(|event| event.event_id.as_str())
@@ -118,10 +121,11 @@ fn package_versions_have_independent_fifo_windows() {
         make_event("v7", "lodash", "4.17.20", "r4", "2026-04-22T10:06:00Z"),
     ];
 
-    let retained = retain_last_n_per_package_version(RetainLastNParams {
+    let retain_last_n_params = RetainLastNParams {
         events: &events,
         max_per_key: 3,
-    });
+    };
+    let retained = retain_last_n_per_package_version(retain_last_n_params);
     let retained_ids: Vec<&str> = retained
         .iter()
         .map(|event| event.event_id.as_str())
@@ -140,10 +144,11 @@ fn returns_empty_when_limit_is_zero() {
         "2026-04-22T10:00:00Z",
     )];
 
-    let retained = retain_last_n_per_package_version(RetainLastNParams {
+    let retain_last_n_params = RetainLastNParams {
         events: &events,
         max_per_key: 0,
-    });
+    };
+    let retained = retain_last_n_per_package_version(retain_last_n_params);
 
     assert!(retained.is_empty());
 }

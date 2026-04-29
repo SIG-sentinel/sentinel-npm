@@ -24,7 +24,7 @@ fn append_and_query_history_events_by_package() {
     let before = Some("before-sha".to_string());
     let after = Some("after-sha".to_string());
 
-    append_history_events(AppendHistoryEventsParams {
+    let append_history_events_params = AppendHistoryEventsParams {
         current_working_directory: temp_dir.path(),
         package_manager: PackageManager::Npm,
         command: "install",
@@ -32,8 +32,9 @@ fn append_and_query_history_events_by_package() {
         lock_hash_before: &before,
         lock_hash_after: &after,
         packages: &packages,
-    })
-    .expect("history append should succeed");
+    };
+
+    append_history_events(append_history_events_params).expect("history append should succeed");
 
     let project_root = resolve_project_root(temp_dir.path()).expect("project root should resolve");
     let ledger_path = resolve_history_ledger_path(&project_root);

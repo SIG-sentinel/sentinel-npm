@@ -121,9 +121,7 @@ function resolveCandidates() {
   return [
     fromEnv,
     path.resolve(cwd, "target/release/sentinel"),
-    path.resolve(cwd, "target/debug/sentinel"),
-    path.resolve(__dirname, "../../../target/release/sentinel"),
-    path.resolve(__dirname, "../../../target/debug/sentinel")
+    path.resolve(cwd, "target/debug/sentinel")
   ].filter(Boolean);
 }
 
@@ -167,7 +165,6 @@ function trySpawnAndExit(command, commandArgs) {
 
 function tryCandidateAndExit(candidate, args) {
   const result = spawnSync(candidate, args, { stdio: "inherit" });
-
   const isMissingBinary = result.error?.code === "ENOENT";
 
   if (isMissingBinary) return false;
@@ -361,19 +358,7 @@ async function runSentinel(args) {
     if (!success) continue;
   }
 
-  if (trySpawnAndExit("sentinel", args)) return;
-
-
-  const cargoFile = path.resolve(process.cwd(), "Cargo.toml");
-  const cargoFileExists = fs.existsSync(cargoFile);
-
-  if (cargoFileExists) {
-    const hasCargo = trySpawnAndExit("cargo", ["run", "--", ...args]);
-
-    if (hasCargo) return;
-  }
-
-  printLines(NO_BINARY_FOUND_MESSAGES);
+  printLines(STRICT_MODE_FALLBACK_MESSAGES);
   process.exit(EXIT_FAILURE);
 }
 

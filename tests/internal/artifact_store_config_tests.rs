@@ -24,8 +24,8 @@ fn get_returns_valid_store_variant() {
 fn init_twice_returns_error() {
     let first_result = init(ArtifactStore::Auto);
     let second_result = init(ArtifactStore::Memory);
-
     let second_is_err = second_result.is_err();
+
     assert!(
         second_is_err,
         "expected second init to fail, but first_result was: {first_result:?}",

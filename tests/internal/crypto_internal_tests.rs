@@ -23,15 +23,17 @@ async fn hash_stream_captures_buffer_in_memory_mode() {
         Ok::<Bytes, reqwest::Error>(Bytes::from_static(b"-world")),
     ]);
 
-    let result = hash_stream(HashStreamParams {
+    let hash_stream_params = HashStreamParams {
         stream,
         package: "fixture",
         capture_buffer: true,
         spool_to_disk: false,
         inflight_counter: None,
-    })
-    .await
-    .expect("hash stream should succeed");
+    };
+
+    let result = hash_stream(hash_stream_params)
+        .await
+        .expect("hash stream should succeed");
 
     assert_eq!(result.bytes, 11);
     assert_eq!(result.buffer.as_deref(), Some(&b"hello-world"[..]));
@@ -47,15 +49,17 @@ async fn hash_stream_uses_spool_without_capturing_buffer() {
         Ok::<Bytes, reqwest::Error>(Bytes::from_static(b"chunk-2")),
     ]);
 
-    let result = hash_stream(HashStreamParams {
+    let hash_stream_params = HashStreamParams {
         stream,
         package: "fixture",
         capture_buffer: false,
         spool_to_disk: true,
         inflight_counter: None,
-    })
-    .await
-    .expect("hash stream with spool should succeed");
+    };
+
+    let result = hash_stream(hash_stream_params)
+        .await
+        .expect("hash stream with spool should succeed");
 
     assert_eq!(result.bytes, 14);
     assert!(result.buffer.is_none());
@@ -78,14 +82,15 @@ async fn hash_stream_spool_mode_respects_max_tarball_size_limit() {
     let chunks = vec![Bytes::from(vec![0u8; chunk_size]); num_chunks];
     let stream = stream::iter(chunks.into_iter().map(Ok::<Bytes, reqwest::Error>));
 
-    let result = hash_stream(HashStreamParams {
+    let hash_stream_params = HashStreamParams {
         stream,
         package: "oversized-pkg",
         capture_buffer: false,
         spool_to_disk: true,
         inflight_counter: None,
-    })
-    .await;
+    };
+
+    let result = hash_stream(hash_stream_params).await;
 
     assert!(
         matches!(
@@ -106,14 +111,15 @@ async fn hash_stream_spool_cleans_up_on_size_exceeded_error() {
     let chunks = vec![Bytes::from(vec![0u8; chunk_size]); num_chunks];
     let stream = stream::iter(chunks.into_iter().map(Ok::<Bytes, reqwest::Error>));
 
-    let result = hash_stream(HashStreamParams {
+    let hash_stream_params = HashStreamParams {
         stream,
         package: "cleanup-test-pkg",
         capture_buffer: false,
         spool_to_disk: true,
         inflight_counter: None,
-    })
-    .await;
+    };
+
+    let result = hash_stream(hash_stream_params).await;
 
     assert!(
         matches!(
