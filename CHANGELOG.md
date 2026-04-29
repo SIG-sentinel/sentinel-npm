@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.1.1] - 2026-04-28
 
+### Fixed
+
+- Included output summary UX improvements in the official release package.
+- Text, GitHub, and JUnit outputs now consistently separate blocking unverifiable findings from provenance warning findings.
+
+
 ### Changed
 
 - Text output summary now separates blocking unverifiable findings from provenance warning findings to reduce false alarm perception in large dependency graphs.
