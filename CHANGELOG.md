@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.1] - 2026-04-28
+
+### Changed
+
+- Text output summary now separates blocking unverifiable findings from provenance warning findings to reduce false alarm perception in large dependency graphs.
+- GitHub annotation summary now reports split counts for `blocking unverifiable` and `provenance warning` instead of a single aggregated unverifiable count.
+- JUnit testsuite metadata now exposes explicit summary attributes for blocking unverifiable findings and provenance warnings.
+
+### Fixed
+
+- Provenance coverage and availability percentages in text output no longer render duplicated `%` symbols.
+
 ## [2.1.0] - 2026-04-28
 
 ### Added

@@ -194,7 +194,7 @@ Good for teams that will use Sentinel daily.
 Standard install to `/usr/local/bin`:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/SIG-sentinel/sentinel-npm/main/scripts/install.sh | sudo sh -s -- --version 2.1.0
+curl -fsSL https://raw.githubusercontent.com/SIG-sentinel/sentinel-npm/main/scripts/install.sh | sudo sh -s -- --version 2.1.1
 ```
 
 Install to user directory:
