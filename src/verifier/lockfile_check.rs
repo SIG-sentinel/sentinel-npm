@@ -781,6 +781,11 @@ fn finalize_clean_provenance_result(
         .provenance_bundle_source
         .clone_from(&provenance_payload.source);
 
+    clean_with_provenance
+        .evidence
+        .provenance_workflow_path
+        .clone_from(&provenance_payload.workflow_path);
+
     verifier.cache_and_return(clean_with_provenance)
 }
 

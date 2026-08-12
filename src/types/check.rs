@@ -66,6 +66,7 @@ pub struct VerifyPackagesExecutionParams {
     pub max_concurrency: usize,
     pub progress_bar: Option<ProgressBar>,
     pub show_text_progress_fallback: bool,
+    pub ledger_path: Option<Arc<std::path::PathBuf>>,
 }
 
 pub struct VerifySinglePackageParams {
@@ -78,4 +79,5 @@ pub struct VerifySinglePackageParams {
     pub show_text_progress_fallback: bool,
     pub total_packages: usize,
     pub progress_step: usize,
+    pub ledger_path: Option<Arc<std::path::PathBuf>>,
 }

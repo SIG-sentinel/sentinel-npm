@@ -224,6 +224,11 @@ async fn execute_check_verification(
         max_concurrency: CHECK_MAX_CONCURRENCY,
         progress_bar,
         show_text_progress_fallback,
+        ledger_path: crate::history::path::resolve_project_root(&args.cwd)
+            .ok()
+            .map(|root| {
+                std::sync::Arc::new(crate::history::path::resolve_history_ledger_path(&root))
+            }),
     };
     let results = verify_packages(verify_packages_execution_params).await;
 

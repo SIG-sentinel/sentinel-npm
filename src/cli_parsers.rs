@@ -1,8 +1,7 @@
 use crate::constants::{
-    CLI_PARSER_ERR_DURATION_TOO_LARGE, CLI_PARSER_ERR_EMPTY_PACKAGE,
-    CLI_PARSER_ERR_EMPTY_TIMESTAMP, CLI_PARSER_ERR_EXPECTED_POSITIVE_INTEGER,
-    CLI_PARSER_ERR_INVALID_TIMESTAMP, CLI_PARSER_ERR_MISSING_VERSION_AFTER_SEPARATOR,
-    CLI_PARSER_ERR_PACKAGE_SPACES, CLI_PARSER_KEYWORD_NOW, CLI_PARSER_SUFFIX_AGO,
+    CLI_PARSER_ERR_DURATION_TOO_LARGE, CLI_PARSER_ERR_EMPTY_TIMESTAMP,
+    CLI_PARSER_ERR_EXPECTED_POSITIVE_INTEGER, CLI_PARSER_ERR_INVALID_TIMESTAMP,
+    CLI_PARSER_KEYWORD_NOW, CLI_PARSER_SUFFIX_AGO,
 };
 
 fn parse_absolute_rfc3339_timestamp(trimmed: &str) -> Option<String> {
@@ -44,24 +43,6 @@ pub(crate) fn parse_rfc3339_timestamp(value: &str) -> Result<String, String> {
     parse_absolute_rfc3339_timestamp(trimmed)
         .or_else(|| parse_now_keyword_timestamp(&normalized))
         .map_or_else(|| parse_relative_timestamp(trimmed, &normalized), Ok)
-}
-
-pub(crate) fn parse_exact_package_version(value: &str) -> Result<String, String> {
-    let trimmed = value.trim();
-    let is_empty_package = trimmed.is_empty();
-    let has_package_spaces = trimmed.chars().any(char::is_whitespace);
-    let has_missing_version_suffix = trimmed.ends_with('@');
-
-    match (
-        is_empty_package,
-        has_package_spaces,
-        has_missing_version_suffix,
-    ) {
-        (true, _, _) => Err(CLI_PARSER_ERR_EMPTY_PACKAGE.to_string()),
-        (false, true, _) => Err(CLI_PARSER_ERR_PACKAGE_SPACES.to_string()),
-        (false, false, true) => Err(CLI_PARSER_ERR_MISSING_VERSION_AFTER_SEPARATOR.to_string()),
-        (false, false, false) => Ok(trimmed.to_string()),
-    }
 }
 
 pub(crate) fn parse_positive_usize(value: &str) -> Result<usize, String> {

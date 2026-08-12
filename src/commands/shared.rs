@@ -5,15 +5,19 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::artifact_store_config;
 use crate::ecosystem::{build_dependency_tree_for_manager, read_lockfile_entries};
+use crate::history::ledger::{HistoryQueryFilters, query_history_events};
 use crate::npm::read_package_json_deps;
+use crate::types::UnverifiableReason;
 use crate::types::{
     BuildLockfileEntryParams, DependencyTree, LockfileEntry, PrintVerificationProgressParams,
-    ReadPackageJsonDepsParams, Report, RunMode, SentinelError, SharedCommandState,
-    SharedCommandStateError, UpdateVerificationProgressParams, VerifierNewParams,
-    VerifyPackagesExecutionParams, VerifyPackagesParams, VerifyResult, VerifySinglePackageParams,
+    ProvenanceAnomaly, ProvenanceAnomalyCheckParams, ReadPackageJsonDepsParams, Report, RunMode,
+    SentinelError, SharedCommandState, SharedCommandStateError, UpdateVerificationProgressParams,
+    VerifierNewParams, VerifyPackagesExecutionParams, VerifyPackagesParams, VerifyResult,
+    VerifySinglePackageParams,
 };
 use crate::verifier::Verifier;
 use crate::verifier::memory_budget::detect_memory_budget;
+use crate::verifier::provenance_anomaly::check_provenance_anomalies;
 
 const FIRST_PROGRESS_UPDATE: usize = 1;
 const PERCENT_SCALE: usize = 100;
@@ -138,6 +142,22 @@ fn update_verification_progress(params: UpdateVerificationProgressParams<'_>) {
     crate::ui::print_verification_progress(print_verification_progress_params);
 }
 
+fn build_provenance_anomaly_detail(anomalies: &[ProvenanceAnomaly]) -> String {
+    let anomaly_descriptions: Vec<String> = anomalies
+        .iter()
+        .map(|anomaly| match anomaly {
+            ProvenanceAnomaly::ProvenanceDisappeared => {
+                "provenance disappeared since last known-good version".to_string()
+            }
+            ProvenanceAnomaly::WorkflowChanged { previous, current } => {
+                format!("publish workflow changed: {previous} → {current}")
+            }
+        })
+        .collect();
+
+    anomaly_descriptions.join("; ")
+}
+
 async fn verify_single_package(params: VerifySinglePackageParams) -> VerifyResult {
     let VerifySinglePackageParams {
         node,
@@ -149,6 +169,7 @@ async fn verify_single_package(params: VerifySinglePackageParams) -> VerifyResul
         show_text_progress_fallback,
         total_packages,
         progress_step,
+        ledger_path,
     } = params;
 
     let permit = concurrency_gate.acquire().await.ok();
@@ -164,6 +185,45 @@ async fn verify_single_package(params: VerifySinglePackageParams) -> VerifyResul
 
     result.is_direct = is_direct;
     result.direct_parent = direct_parent;
+
+    let provenance_anomaly_detail = ledger_path.as_ref().and_then(|history_ledger_path| {
+        let filters = HistoryQueryFilters {
+            from: chrono::DateTime::<chrono::Utc>::MIN_UTC,
+            to: chrono::Utc::now(),
+            package: Some(result.package.name.clone()),
+            version: None,
+            project: None,
+            package_manager: None,
+        };
+
+        let last_event_for_package = query_history_events(history_ledger_path, &filters)
+            .ok()
+            .and_then(|mut events| events.pop());
+
+        let current_had_provenance = result.evidence.provenance_workflow_path.is_some()
+            || result.evidence.provenance_identity.is_some();
+
+        let check_provenance_anomaly_params = ProvenanceAnomalyCheckParams {
+            current_had_provenance,
+            current_workflow_path: result.evidence.provenance_workflow_path.as_deref(),
+            last_event_for_package: last_event_for_package.as_ref(),
+        };
+
+        let anomalies = check_provenance_anomalies(&check_provenance_anomaly_params);
+        let is_clean_result = result.is_clean();
+
+        match (is_clean_result, anomalies.is_empty()) {
+            (true, false) => Some(build_provenance_anomaly_detail(&anomalies)),
+            _ => None,
+        }
+    });
+
+    if let Some(provenance_anomaly_detail) = provenance_anomaly_detail {
+        result.verdict = crate::types::Verdict::Unverifiable {
+            reason: UnverifiableReason::ProvenanceAnomalous,
+        };
+        result.detail = provenance_anomaly_detail;
+    }
 
     drop(permit);
 
@@ -186,6 +246,7 @@ pub(super) async fn verify_packages(params: VerifyPackagesExecutionParams) -> Ve
         max_concurrency,
         progress_bar,
         show_text_progress_fallback,
+        ledger_path,
     } = params;
 
     let VerifyPackagesParams {
@@ -220,6 +281,7 @@ pub(super) async fn verify_packages(params: VerifyPackagesExecutionParams) -> Ve
                 show_text_progress_fallback,
                 total_packages,
                 progress_step,
+                ledger_path: ledger_path.clone(),
             };
 
             verify_single_package(verify_single_package_params)

@@ -2,6 +2,7 @@ pub mod artifact_cleanup;
 mod install_check;
 mod lockfile_check;
 pub mod memory_budget;
+pub mod provenance_anomaly;
 
 use crate::cache::LocalCache;
 use crate::constants::{INTEGRITY_PREFIX_SHA512, render_template};

@@ -125,6 +125,8 @@ pub fn append_history_events(params: AppendHistoryEventsParams<'_>) -> Result<()
             },
             package: package.clone(),
             result: HISTORY_RESULT_SUCCESS.to_string(),
+            had_provenance: false,
+            provenance_workflow_path: None,
         })
         .collect();
 

@@ -35,9 +35,25 @@ sentinel verifies npm packages by comparing their sha512 hash against
 npm's own dist.integrity field — before or after installation.
 
 COMMANDS:
-  check    Audit installed packages (compares lockfile vs npm registry)
-  install  Download, verify, then install (closes TOCTOU attack window)
-  ci       CI mode: strict + fail-on-warn + JSON report
+  check    Audit lockfile dependencies without installing
+  install  Verify and install one package safely
+  ci       Verify all dependencies, then run clean install
+  history  Query local sentinel install/ci history
+
+MAIN EXAMPLES (lowest friction):
+  Want to audit current project:
+    npx --yes sentinel-check check
+
+  Want to install one package safely:
+    npx --yes sentinel-check install lodash@4.17.21
+
+  Want to install multiple packages safely (single command):
+    npx --yes sentinel-check install lodash@4.17.21 axios@1.11.0
+
+  Want to create/recover a secure lockfile, then verify+install:
+    npx --yes sentinel-check ci --init-lockfile --package-manager npm
+    npx --yes sentinel-check ci --init-lockfile --package-manager yarn
+    npx --yes sentinel-check ci --init-lockfile --package-manager pnpm
 
 SECURITY MODEL:
   - CLEAN:        sha512(tarball) matches npm dist.integrity — safe

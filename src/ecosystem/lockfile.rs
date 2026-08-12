@@ -296,6 +296,7 @@ fn flush_yarn_entry(params: FlushYarnEntryParams<'_>) {
         integrity,
         dependency_specs,
     };
+
     parsed_entries.push(parsed_entry);
 }
 

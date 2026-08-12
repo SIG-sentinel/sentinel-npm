@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
+use crate::history::types::HistoryEvent;
+
 use super::package::PackageRef;
 use super::report::Report;
 
@@ -98,6 +100,10 @@ impl VerifyResult {
     pub fn is_provenance_inconsistent(&self) -> bool {
         self.is_unverifiable_with_reason(UnverifiableReason::ProvenanceInconsistent)
     }
+
+    pub fn is_provenance_anomalous(&self) -> bool {
+        self.is_unverifiable_with_reason(UnverifiableReason::ProvenanceAnomalous)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -125,6 +131,7 @@ pub enum UnverifiableReason {
     TarballTooLarge,
     ProvenanceMissing,
     ProvenanceInconsistent,
+    ProvenanceAnomalous,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -145,6 +152,7 @@ pub struct Evidence {
     pub provenance_issuer: Option<String>,
     pub provenance_identity: Option<String>,
     pub provenance_bundle_source: Option<String>,
+    pub provenance_workflow_path: Option<String>,
 }
 
 impl Evidence {
@@ -158,6 +166,7 @@ impl Evidence {
             provenance_issuer: None,
             provenance_identity: None,
             provenance_bundle_source: None,
+            provenance_workflow_path: None,
         }
     }
 }
@@ -170,6 +179,18 @@ pub struct VerifyResultWithTarball {
 pub enum VerifiedTarball {
     Memory(Vec<u8>),
     Spool(PathBuf),
+}
+
+pub struct ProvenanceAnomalyCheckParams<'a> {
+    pub current_had_provenance: bool,
+    pub current_workflow_path: Option<&'a str>,
+    pub last_event_for_package: Option<&'a HistoryEvent>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ProvenanceAnomaly {
+    ProvenanceDisappeared,
+    WorkflowChanged { previous: String, current: String },
 }
 
 pub struct CreateUnverifiableParams<'a> {

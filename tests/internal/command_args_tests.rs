@@ -1,23 +1,32 @@
-use crate::cli_parsers::{parse_exact_package_version, parse_rfc3339_timestamp};
+use clap::Parser;
+
+use crate::cli_parsers::parse_rfc3339_timestamp;
+use crate::types::{Cli, Commands};
 
 #[test]
 fn install_spec_accepts_package_without_version_for_candidate_resolution() {
-    let result = parse_exact_package_version("lodash");
+    let cli = Cli::try_parse_from(["sentinel", "install", "lodash"])
+        .expect("install should accept package without explicit version to resolve a candidate");
 
-    assert!(
-        result.is_ok(),
-        "install should accept package without explicit version to resolve a candidate"
-    );
+    match cli.command {
+        Commands::Install(args) => {
+            assert_eq!(args.packages, vec!["lodash".to_string()]);
+        }
+        _ => panic!("expected install command"),
+    }
 }
 
 #[test]
 fn install_spec_accepts_latest_tag_for_candidate_resolution() {
-    let result = parse_exact_package_version("lodash@latest");
+    let cli = Cli::try_parse_from(["sentinel", "install", "lodash@latest"])
+        .expect("install should accept latest tag to resolve and pin an exact candidate");
 
-    assert!(
-        result.is_ok(),
-        "install should accept latest tag to resolve and pin an exact candidate"
-    );
+    match cli.command {
+        Commands::Install(args) => {
+            assert_eq!(args.packages, vec!["lodash@latest".to_string()]);
+        }
+        _ => panic!("expected install command"),
+    }
 }
 
 #[test]
