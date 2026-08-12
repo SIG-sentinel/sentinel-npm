@@ -55,36 +55,10 @@ fn complete_successful_ci_run(params: CompleteSuccessfulCiRunParams<'_>) -> Exit
     super::helpers::complete_successful_ci_run(params)
 }
 
-fn read_initial_ledger_snapshot(
-    ledger_path: Option<&std::path::PathBuf>,
-) -> Result<Option<Vec<u8>>, std::io::Error> {
-    match ledger_path {
-        Some(path) => match std::fs::read(path) {
-            Ok(contents) => Ok(Some(contents)),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
-            Err(error) => Err(error),
-        },
-        None => Ok(None),
-    }
-}
-
-fn restore_ledger_snapshot(
-    ledger_path: Option<&std::path::PathBuf>,
-    initial_ledger_snapshot: Option<&Vec<u8>>,
-) -> Result<(), std::io::Error> {
-    match (ledger_path, initial_ledger_snapshot) {
-        (Some(path), Some(contents)) => std::fs::write(path, contents),
-        (Some(path), None) => {
-            let remove_file_result = std::fs::remove_file(path);
-
-            match remove_file_result {
-                Ok(()) => Ok(()),
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-                Err(error) => Err(error),
-            }
-        }
-        _ => Ok(()),
-    }
+fn parse_requested_install(
+    args: &InstallArgs,
+) -> Result<(crate::types::InstallPackageRequest, PackageRef), ExitCode> {
+    super::helpers::parse_requested_install(args)
 }
 
 fn load_install_shared_state(
@@ -112,7 +86,7 @@ async fn prepare_install_state(
     let PrepareInstallStateParams {
         args,
         manager: _,
-        package_spec,
+        package_spec: _,
     } = params;
 
     if let Err(error) = validate_package_json_dependencies(&args.cwd) {
@@ -121,8 +95,7 @@ async fn prepare_install_state(
         return Err(ExitCode::FAILURE);
     }
 
-    let (install_request, requested_package_ref) =
-        super::helpers::parse_requested_install(package_spec)?;
+    let (install_request, requested_package_ref) = parse_requested_install(args)?;
 
     super::lockfile::prepare_install_lockfiles(args, &requested_package_ref)?;
 
@@ -392,7 +365,7 @@ async fn execute_verification_run(params: ExecuteVerificationRunParams<'_>) -> V
         packages_to_verify,
         verifier,
         lockfile_entries,
-        cwd,
+        cwd: _,
     } = params;
     let is_text_output = matches!(output_format, OutputFormat::Text);
     let should_print_verification_started = !quiet && is_text_output;
@@ -427,11 +400,7 @@ async fn execute_verification_run(params: ExecuteVerificationRunParams<'_>) -> V
         max_concurrency: INSTALL_MAX_CONCURRENCY,
         progress_bar: verify_progress_bar,
         show_text_progress_fallback,
-        ledger_path: crate::history::path::resolve_project_root(cwd)
-            .ok()
-            .map(|root| {
-                std::sync::Arc::new(crate::history::path::resolve_history_ledger_path(&root))
-            }),
+        ledger_path: None,
     };
 
     verify_packages(verify_packages_execution_params).await
@@ -586,7 +555,7 @@ pub(super) async fn finalize_install_run(
         report,
         lock_hash_before_verify,
         prevalidated_tarball,
-        cwd: _cwd,
+        cwd: _,
     } = params;
     let is_text_output = matches!(args.format, OutputFormat::Text);
     let print_install_report_if_needed_params = PrintInstallReportParams { args, report };
@@ -703,21 +672,8 @@ async fn run_install_with_prepared_state(
 }
 
 pub(super) async fn run_install(args: &InstallArgs) -> ExitCode {
-    if args.packages.is_empty() {
-        ui::print_generic_error("At least one package must be provided");
-        return ExitCode::FAILURE;
-    }
-
-    if args.packages.len() == 1 {
-        return run_install_single_package(args).await;
-    }
-
-    run_install_multiple_packages(args).await
-}
-
-async fn run_install_single_package(args: &InstallArgs) -> ExitCode {
-    let package_hint = &args.packages[0];
-    let install_command_hint = build_install_command_hint(CLI_COMMAND_HINT_INSTALL, package_hint);
+    let packages_spec = args.packages.join(" ");
+    let install_command_hint = build_install_command_hint(CLI_COMMAND_HINT_INSTALL, &packages_spec);
     let resolve_install_package_manager_params = ResolvePackageManagerParams {
         project_dir: &args.cwd,
         explicit_pm: args.package_manager.as_deref(),
@@ -735,7 +691,7 @@ async fn run_install_single_package(args: &InstallArgs) -> ExitCode {
     let prepare_install_state_params = PrepareInstallStateParams {
         args,
         manager,
-        package_spec: &args.packages[0],
+        package_spec: &packages_spec,
     };
     let outcome = match prepare_install_state(prepare_install_state_params).await {
         Ok(prepared_state) => run_install_with_prepared_state(args, prepared_state).await,
@@ -758,122 +714,6 @@ async fn run_install_single_package(args: &InstallArgs) -> ExitCode {
     }
 
     outcome.exit_code
-}
-
-async fn run_install_multiple_packages(args: &InstallArgs) -> ExitCode {
-    let initial_snapshot = capture_project_files_snapshot(&args.cwd);
-    let is_text_output = matches!(args.format, OutputFormat::Text);
-    let should_print_progress = !args.quiet && is_text_output;
-
-    let ledger_path = crate::history::path::resolve_project_root(&args.cwd)
-        .ok()
-        .map(|root| crate::history::path::resolve_history_ledger_path(&root));
-    let read_initial_ledger_snapshot_params = ledger_path.as_ref();
-    let initial_ledger_snapshot = match read_initial_ledger_snapshot(read_initial_ledger_snapshot_params)
-    {
-        Ok(snapshot) => snapshot,
-        Err(error) => {
-            ui::print_generic_error(&format!(
-                "Failed to snapshot history ledger before multi-package install: {error}"
-            ));
-            return ExitCode::FAILURE;
-        }
-    };
-
-    let install_command_hint = format!("{} packages", args.packages.len());
-    let resolve_install_package_manager_params = ResolvePackageManagerParams {
-        project_dir: &args.cwd,
-        explicit_pm: args.package_manager.as_deref(),
-        command_hint: &install_command_hint,
-    };
-    let manager = match resolve_package_manager(&resolve_install_package_manager_params) {
-        Ok(manager) => manager,
-        Err(error) => {
-            ui::print_generic_error(&error);
-            return ExitCode::FAILURE;
-        }
-    };
-
-    let total_packages = args.packages.len();
-    let mut any_failed = false;
-    let mut should_restore_snapshot = false;
-
-    for (idx, package_spec) in args.packages.iter().enumerate() {
-        let step = idx + 1;
-        if should_print_progress {
-            eprintln!("[{step}/{total_packages}] Installing {package_spec}...");
-        }
-
-        let prepare_install_state_params = PrepareInstallStateParams {
-            args,
-            manager,
-            package_spec,
-        };
-
-        let prepared_state = match prepare_install_state(prepare_install_state_params).await {
-            Ok(state) => state,
-            Err(_exit_code) => {
-                ui::print_generic_error(&format!("Failed to prepare install for {package_spec}"));
-                any_failed = true;
-                break;
-            }
-        };
-
-        let outcome = run_install_with_prepared_state(args, prepared_state).await;
-
-        if outcome.should_restore_snapshot {
-            should_restore_snapshot = true;
-        }
-
-        if outcome.exit_code != ExitCode::SUCCESS {
-            if should_print_progress {
-                eprintln!("[{step}/{total_packages}] ✗ Installation failed for {package_spec}");
-            }
-
-            any_failed = true;
-            break;
-        }
-
-        if should_print_progress {
-            eprintln!("[{step}/{total_packages}] ✓ Installation succeeded for {package_spec}");
-        }
-    }
-
-    let should_rollback = any_failed || should_restore_snapshot;
-
-    if should_rollback {
-        if should_print_progress {
-            eprintln!("Rolling back project files (package.json and lockfile)...");
-        }
-
-        let restore_project_files_snapshot_params = RestoreProjectFilesSnapshotParams {
-            snapshot: &initial_snapshot,
-            current_working_directory: &args.cwd,
-        };
-
-        if let Err(error) = restore_project_files_snapshot(restore_project_files_snapshot_params) {
-            ui::print_rollback_failed(&error);
-            return ExitCode::FAILURE;
-        }
-
-        let restore_ledger_snapshot_result =
-            restore_ledger_snapshot(ledger_path.as_ref(), initial_ledger_snapshot.as_ref());
-
-        if let Err(error) = restore_ledger_snapshot_result {
-            ui::print_rollback_failed(&error);
-            return ExitCode::FAILURE;
-        }
-
-        if should_print_progress {
-            eprintln!("✓ Project files rolled back");
-        }
-
-        if any_failed {
-            return ExitCode::FAILURE;
-        }
-    }
-
-    ExitCode::SUCCESS
 }
 
 pub(super) async fn run_ci(args: &CiArgs) -> ExitCode {

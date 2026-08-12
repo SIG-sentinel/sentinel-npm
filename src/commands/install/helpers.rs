@@ -5,11 +5,11 @@ use crate::constants::{FALLBACK_PROCESS_EXIT_CODE, PACKAGE_VERSION_LATEST};
 use crate::output::print_report;
 use crate::types::{
     AnalyzeDependencyCyclesParams, AppendCiHistoryParams, CollectInstallPackagesParams,
-    CompleteSuccessfulCiRunParams, DependencyNode, FinalizeCiDryRunParams, InstallPackageRequest,
-    OutputFormat, PackageRef, PrintAndSaveCiReportParams, PrintInstallCandidateResolvedParams,
-    PrintReportParams, ResolveInstallTargetsParams, RunCleanInstallOrFailureParams,
-    RunCleanInstallParams, SaveCiReportParams, SharedCommandState, SharedCommandStateError,
-    ShouldPrintReportParams,
+    CompleteSuccessfulCiRunParams, DependencyNode, FinalizeCiDryRunParams, InstallArgs,
+    InstallPackageRequest, OutputFormat, PackageRef, PrintAndSaveCiReportParams,
+    PrintInstallCandidateResolvedParams, PrintReportParams, ResolveInstallTargetsParams,
+    RunCleanInstallOrFailureParams, RunCleanInstallParams, SaveCiReportParams, SharedCommandState,
+    SharedCommandStateError, ShouldPrintReportParams,
 };
 use crate::ui::command_feedback as ui;
 
@@ -205,16 +205,16 @@ pub(super) fn complete_successful_ci_run(params: CompleteSuccessfulCiRunParams<'
 }
 
 pub(super) fn parse_requested_install(
-    package_spec: &str,
+    args: &InstallArgs,
 ) -> Result<(InstallPackageRequest, PackageRef), ExitCode> {
-    let install_request =
-        super::resolve::parse_install_package_request(package_spec).ok_or_else(|| {
-            let package_name_hint = package_spec
+    let install_request = super::resolve::parse_install_package_request(&args.packages[0])
+        .ok_or_else(|| {
+            let package_name_hint = args.packages[0]
                 .split('@')
-                .find(|segment| !segment.is_empty())
+                .find(|segment: &&str| !segment.is_empty())
                 .unwrap_or("<package>");
 
-            ui::print_invalid_install_package_input(package_spec, package_name_hint);
+            ui::print_invalid_install_package_input(&args.packages[0], package_name_hint);
 
             ExitCode::FAILURE
         })?;
@@ -291,13 +291,8 @@ pub(super) fn resolve_install_targets(
 
     if should_print_resolved_candidate {
         let transitive_count = packages_to_verify.len().saturating_sub(1);
-        let requested_spec = if install_request.version_spec.is_some() {
-            requested_package_ref.to_string()
-        } else {
-            install_request.package_name.clone()
-        };
         let print_install_candidate_resolved_params = PrintInstallCandidateResolvedParams {
-            requested_spec: &requested_spec,
+            requested_spec: &args.packages[0],
             resolved_candidate: &resolved_package_ref,
             transitive_count,
         };
