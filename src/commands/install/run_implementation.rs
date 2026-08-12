@@ -733,6 +733,13 @@ async fn run_install_multiple_packages(args: &InstallArgs) -> ExitCode {
     let is_text_output = matches!(args.format, OutputFormat::Text);
     let should_print_progress = !args.quiet && is_text_output;
 
+    let ledger_path = crate::history::path::resolve_project_root(&args.cwd)
+        .ok()
+        .map(|root| crate::history::path::resolve_history_ledger_path(&root));
+    let initial_ledger_snapshot = ledger_path
+        .as_ref()
+        .and_then(|path| std::fs::read(path).ok());
+
     let install_command_hint = format!("{} packages", args.packages.len());
     let resolve_install_package_manager_params = ResolvePackageManagerParams {
         project_dir: &args.cwd,
@@ -807,6 +814,16 @@ async fn run_install_multiple_packages(args: &InstallArgs) -> ExitCode {
         if let Err(error) = restore_project_files_snapshot(restore_project_files_snapshot_params) {
             ui::print_rollback_failed(&error);
             return ExitCode::FAILURE;
+        }
+
+        match (&ledger_path, &initial_ledger_snapshot) {
+            (Some(path), Some(contents)) => {
+                let _ = std::fs::write(path, contents);
+            }
+            (Some(path), None) => {
+                let _ = std::fs::remove_file(path);
+            }
+            _ => {}
         }
 
         if should_print_progress {
