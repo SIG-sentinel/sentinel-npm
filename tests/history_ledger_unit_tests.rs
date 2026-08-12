@@ -6,13 +6,17 @@ use sentinel::history::ledger::{
     AppendHistoryEventsParams, HistoryQueryFilters, append_history_events, query_history_events,
 };
 use sentinel::history::path::{resolve_history_ledger_path, resolve_project_root};
-use sentinel::history::types::HistoryPackageMetadata;
+use sentinel::history::types::{HistoryEventPackageInput, HistoryPackageMetadata};
 
-fn package(name: &str, version: &str, direct: bool) -> HistoryPackageMetadata {
-    HistoryPackageMetadata {
-        name: name.to_string(),
-        version: version.to_string(),
-        direct,
+fn package(name: &str, version: &str, direct: bool) -> HistoryEventPackageInput {
+    HistoryEventPackageInput {
+        package: HistoryPackageMetadata {
+            name: name.to_string(),
+            version: version.to_string(),
+            direct,
+        },
+        had_provenance: false,
+        provenance_workflow_path: None,
     }
 }
 

@@ -16,7 +16,9 @@ use sentinel::commands;
 use sentinel::ecosystem::PackageManager;
 use sentinel::history::ledger::{AppendHistoryEventsParams, append_history_events};
 use sentinel::history::path::{resolve_history_ledger_path, resolve_project_root};
-use sentinel::history::types::{HistoryOutputFormat, HistoryPackageMetadata};
+use sentinel::history::types::{
+    HistoryEventPackageInput, HistoryOutputFormat, HistoryPackageMetadata,
+};
 use sentinel::types::HistoryArgs;
 
 const EXIT_SUCCESS: ExitCode = ExitCode::SUCCESS;
@@ -53,15 +55,19 @@ fn history_args(dir: &std::path::Path, from: &str, to: &str) -> HistoryArgs {
     }
 }
 
-fn package(name: &str, version: &str) -> HistoryPackageMetadata {
-    HistoryPackageMetadata {
-        name: name.to_string(),
-        version: version.to_string(),
-        direct: true,
+fn package(name: &str, version: &str) -> HistoryEventPackageInput {
+    HistoryEventPackageInput {
+        package: HistoryPackageMetadata {
+            name: name.to_string(),
+            version: version.to_string(),
+            direct: true,
+        },
+        had_provenance: false,
+        provenance_workflow_path: None,
     }
 }
 
-fn seed_ledger(dir: &std::path::Path, pkgs: &[HistoryPackageMetadata]) {
+fn seed_ledger(dir: &std::path::Path, pkgs: &[HistoryEventPackageInput]) {
     let lock_hash = Some("sha256-abc".to_string());
     let append_history_events_params = AppendHistoryEventsParams {
         current_working_directory: dir,

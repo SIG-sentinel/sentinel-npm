@@ -3,7 +3,7 @@
 use sentinel::ecosystem::PackageManager;
 use sentinel::history::ledger::{AppendHistoryEventsParams, append_history_events};
 use sentinel::history::path::{resolve_history_ledger_path, resolve_project_root};
-use sentinel::history::types::HistoryPackageMetadata;
+use sentinel::history::types::{HistoryEventPackageInput, HistoryPackageMetadata};
 use sentinel::types::{ProvenanceAnomaly, ProvenanceAnomalyCheckParams};
 use sentinel::verifier::provenance_anomaly::check_provenance_anomalies;
 
@@ -18,10 +18,14 @@ fn append_package_event(
     had_provenance: bool,
     workflow_path: Option<&str>,
 ) {
-    let packages = vec![HistoryPackageMetadata {
-        name: name.to_string(),
-        version: version.to_string(),
-        direct: true,
+    let packages = vec![HistoryEventPackageInput {
+        package: HistoryPackageMetadata {
+            name: name.to_string(),
+            version: version.to_string(),
+            direct: true,
+        },
+        had_provenance,
+        provenance_workflow_path: workflow_path.map(ToString::to_string),
     }];
 
     let append_params = AppendHistoryEventsParams {
@@ -35,22 +39,6 @@ fn append_package_event(
     };
 
     append_history_events(append_params).expect("append should succeed");
-
-    let project_root = resolve_project_root(dir).expect("project root");
-    let ledger_path = resolve_history_ledger_path(&project_root);
-    let content = std::fs::read_to_string(&ledger_path).expect("read ledger");
-    let mut lines: Vec<String> = content.lines().map(ToString::to_string).collect();
-
-    let last_line = lines.last_mut().expect("at least one line");
-    let mut event: serde_json::Value = serde_json::from_str(last_line).expect("parse last event");
-
-    event["had_provenance"] = serde_json::Value::Bool(had_provenance);
-    if let Some(wp) = workflow_path {
-        event["provenance_workflow_path"] = serde_json::Value::String(wp.to_string());
-    }
-
-    *last_line = serde_json::to_string(&event).expect("serialize patched event");
-    std::fs::write(&ledger_path, lines.join("\n") + "\n").expect("write ledger");
 }
 
 #[test]
