@@ -145,6 +145,8 @@ This section reflects the current CLI help output.
    Sentinel performs provenance checks during verification automatically (no separate `provenance verify` command), and provenance fields are included in evidence/report output when available.
 4. Post-verify safety pass:
    `--post-verify` performs a second integrity pass after install by validating installed content against verified artifacts, useful for extra assurance in CI and release workflows.
+5. Output summary split:
+   Text, GitHub, and JUnit outputs separate `blocking unverifiable` from `provenance warning` to reduce false-alarm noise while preserving strict blocking behavior for security-relevant issues.
 
 ### Useful environment variables
 
@@ -194,21 +196,21 @@ Good for teams that will use Sentinel daily.
 Standard install to `/usr/local/bin`:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/SIG-sentinel/sentinel-npm/main/scripts/install.sh | sudo sh -s -- --version 2.1.1
+curl -fsSL https://raw.githubusercontent.com/SIG-sentinel/sentinel-npm/main/scripts/install.sh | sudo sh -s -- --version 2.1.2
 ```
 
 Install to user directory:
 
 ```bash
 curl -fsSL -o /tmp/install-sentinel.sh https://raw.githubusercontent.com/SIG-sentinel/sentinel-npm/main/scripts/install.sh
-INSTALL_DIR="$HOME/.local/bin" sh /tmp/install-sentinel.sh --version 2.1.0
+INSTALL_DIR="$HOME/.local/bin" sh /tmp/install-sentinel.sh --version 2.1.2
 ```
 
 Pin a specific version:
 
 ```bash
 curl -fsSL -o /tmp/install-sentinel.sh https://raw.githubusercontent.com/SIG-sentinel/sentinel-npm/main/scripts/install.sh
-sh /tmp/install-sentinel.sh --version 2.1.0
+sh /tmp/install-sentinel.sh --version 2.1.2
 ```
 
 Confirm installation:
@@ -343,7 +345,7 @@ If your repository already commits a trusted lockfile, prefer plain `sentinel ci
 
 ```yaml
 - name: Install sentinel
-  run: curl -fsSL https://raw.githubusercontent.com/SIG-sentinel/sentinel-npm/main/scripts/install.sh | sudo sh -s -- --version 2.1.0
+  run: curl -fsSL https://raw.githubusercontent.com/SIG-sentinel/sentinel-npm/main/scripts/install.sh | sudo sh -s -- --version 2.1.2
 
 - name: Verify dependency integrity
   run: sentinel ci
