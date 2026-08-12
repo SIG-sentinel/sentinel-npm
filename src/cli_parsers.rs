@@ -1,7 +1,9 @@
 use crate::constants::{
-    CLI_PARSER_ERR_DURATION_TOO_LARGE, CLI_PARSER_ERR_EMPTY_TIMESTAMP,
-    CLI_PARSER_ERR_EXPECTED_POSITIVE_INTEGER, CLI_PARSER_ERR_INVALID_TIMESTAMP,
-    CLI_PARSER_KEYWORD_NOW, CLI_PARSER_SUFFIX_AGO,
+    CLI_PARSER_ERR_DURATION_TOO_LARGE, CLI_PARSER_ERR_EMPTY_PACKAGE,
+    CLI_PARSER_ERR_EMPTY_TIMESTAMP, CLI_PARSER_ERR_EXPECTED_POSITIVE_INTEGER,
+    CLI_PARSER_ERR_INVALID_TIMESTAMP, CLI_PARSER_ERR_MISSING_VERSION_AFTER_SEPARATOR,
+    CLI_PARSER_ERR_PACKAGE_SPACES, CLI_PARSER_KEYWORD_NOW, CLI_PARSER_SUFFIX_AGO,
+    PACKAGE_SPEC_SEPARATOR,
 };
 
 fn parse_absolute_rfc3339_timestamp(trimmed: &str) -> Option<String> {
@@ -57,4 +59,27 @@ pub(crate) fn parse_positive_usize(value: &str) -> Result<usize, String> {
     }
 
     Ok(parsed)
+}
+
+pub(crate) fn parse_install_package_spec(value: &str) -> Result<String, String> {
+    let trimmed = value.trim();
+    let is_empty_package = trimmed.is_empty();
+
+    if is_empty_package {
+        return Err(CLI_PARSER_ERR_EMPTY_PACKAGE.to_string());
+    }
+
+    let has_whitespace = trimmed.chars().any(char::is_whitespace);
+
+    if has_whitespace {
+        return Err(CLI_PARSER_ERR_PACKAGE_SPACES.to_string());
+    }
+
+    let ends_with_separator = trimmed.ends_with(PACKAGE_SPEC_SEPARATOR);
+
+    if ends_with_separator {
+        return Err(CLI_PARSER_ERR_MISSING_VERSION_AFTER_SEPARATOR.to_string());
+    }
+
+    Ok(trimmed.to_string())
 }

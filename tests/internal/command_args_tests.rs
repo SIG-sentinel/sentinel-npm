@@ -32,6 +32,26 @@ fn install_spec_accepts_latest_tag_for_candidate_resolution() {
 }
 
 #[test]
+fn install_spec_rejects_missing_version_after_separator_at_parse_time() {
+    let parse_result = Cli::try_parse_from(["sentinel", "install", "lodash@"]);
+
+    assert!(
+        parse_result.is_err(),
+        "install should reject missing version in clap argument parsing"
+    );
+}
+
+#[test]
+fn install_spec_rejects_internal_spaces_at_parse_time() {
+    let parse_result = Cli::try_parse_from(["sentinel", "install", "lodash @4.17.21"]);
+
+    assert!(
+        parse_result.is_err(),
+        "install should reject package specs that contain spaces"
+    );
+}
+
+#[test]
 fn history_timestamp_accepts_relative_ago_input() {
     let result = parse_rfc3339_timestamp("7 days ago");
 

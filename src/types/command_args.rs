@@ -2,7 +2,9 @@ use std::path::PathBuf;
 
 use clap::Args;
 
-use crate::cli_parsers::{parse_positive_usize, parse_rfc3339_timestamp};
+use crate::cli_parsers::{
+    parse_install_package_spec, parse_positive_usize, parse_rfc3339_timestamp,
+};
 use crate::constants::{
     CI_REGISTRY_TIMEOUT_MS, CLI_ARG_DEFAULT_CWD, CLI_ARG_DEFAULT_OUTPUT_FORMAT,
     CLI_ARG_DEFAULT_REPORT_PATH, CLI_ARG_VALUE_NAME_PACKAGE_MANAGER,
@@ -20,6 +22,7 @@ pub struct InstallArgs {
         value_name = CLI_ARG_VALUE_NAME_PACKAGE_WITH_VERSION,
         num_args = 1..,
         required = true,
+        value_parser = parse_install_package_spec,
         help = "One or more packages to install (e.g., lodash@4.17.21 axios@1.11.0)"
     )]
     pub packages: Vec<String>,
