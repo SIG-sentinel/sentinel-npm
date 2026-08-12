@@ -36,7 +36,7 @@ npm's own dist.integrity field — before or after installation.
 
 COMMANDS:
   check    Audit lockfile dependencies without installing
-  install  Verify and install one package safely
+  install  Verify and install one or more packages safely
   ci       Verify all dependencies, then run clean install
   history  Query local sentinel install/ci history
 
