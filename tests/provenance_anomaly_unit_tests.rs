@@ -192,7 +192,7 @@ fn no_workflow_anomaly_when_current_has_no_workflow() {
 }
 
 #[test]
-fn detects_both_anomalies_when_provenance_disappears_and_workflow_was_known() {
+fn detects_provenance_disappeared_when_previous_workflow_was_known() {
     let last_event = make_history_event(
         "axios",
         "1.6.0",

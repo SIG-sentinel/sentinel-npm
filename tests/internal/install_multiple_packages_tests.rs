@@ -167,13 +167,45 @@ fn test_multi_package_ui_feedback_shows_progress_per_package() {
 }
 
 #[test]
-fn test_rollback_removes_all_partial_changes_on_failure() {
-    let initial_state = "clean";
-    let after_pkg1_install = "lodash installed, package.json updated";
-    let after_pkg2_failure = "axios install failed";
-    let final_state_after_rollback = "clean";
+fn test_rollback_restores_project_files_from_snapshot() {
+    use crate::types::RestoreProjectFilesSnapshotParams;
+    use crate::utils::{capture_project_files_snapshot, restore_project_files_snapshot};
 
-    assert_ne!(after_pkg1_install, final_state_after_rollback);
-    assert_ne!(after_pkg2_failure, final_state_after_rollback);
-    assert_eq!(initial_state, final_state_after_rollback);
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let cwd = temp_dir.path();
+
+    let original_package_json = b"{\"name\":\"test\",\"version\":\"1.0.0\"}";
+    let original_lockfile = b"{\"lockfileVersion\":3}";
+
+    std::fs::write(cwd.join("package.json"), original_package_json)
+        .expect("write package.json");
+    std::fs::write(cwd.join("package-lock.json"), original_lockfile)
+        .expect("write lockfile");
+
+    let snapshot = capture_project_files_snapshot(cwd);
+
+    std::fs::write(
+        cwd.join("package.json"),
+        b"{\"name\":\"test\",\"version\":\"1.0.0\",\"dependencies\":{\"lodash\":\"^4.17.21\"}}",
+    )
+    .expect("modify package.json");
+    std::fs::write(
+        cwd.join("package-lock.json"),
+        b"{\"lockfileVersion\":3,\"packages\":{\"lodash\":{}}}",
+    )
+    .expect("modify lockfile");
+
+    let restore_params = RestoreProjectFilesSnapshotParams {
+        snapshot: &snapshot,
+        current_working_directory: cwd,
+    };
+    restore_project_files_snapshot(restore_params).expect("restore should succeed");
+
+    let restored_package_json =
+        std::fs::read(cwd.join("package.json")).expect("read restored package.json");
+    let restored_lockfile =
+        std::fs::read(cwd.join("package-lock.json")).expect("read restored lockfile");
+
+    assert_eq!(restored_package_json, original_package_json);
+    assert_eq!(restored_lockfile, original_lockfile);
 }

@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 
@@ -135,6 +135,61 @@ pub fn append_history_events(params: AppendHistoryEventsParams<'_>) -> Result<()
         events: &events,
     };
     append_events(append_events_params)
+}
+
+pub fn read_latest_events_by_package(
+    ledger_path: &Path,
+) -> Result<HashMap<String, HistoryEvent>, String> {
+    if !ledger_path.exists() {
+        return Ok(HashMap::new());
+    }
+
+    let file = std::fs::File::open(ledger_path)
+        .map_err(|error| render_template(LEDGER_ERR_READ_FILE, &[error.to_string()]))?;
+    let reader = BufReader::new(file);
+
+    let mut latest_by_package: HashMap<String, HistoryEvent> = HashMap::new();
+    let mut skipped_lines = 0usize;
+
+    for (line_index, line_result) in reader.lines().enumerate() {
+        let line = line_result
+            .map_err(|error| render_template(LEDGER_ERR_READ_LINE, &[error.to_string()]))?;
+
+        if line.trim().is_empty() {
+            continue;
+        }
+
+        let event = match serde_json::from_str::<HistoryEvent>(&line) {
+            Ok(event) => event,
+            Err(error) if line_index == FIRST_LEDGER_LINE_INDEX => {
+                return Err(render_template(
+                    LEDGER_ERR_CORRUPTED_FIRST_LINE_TEMPLATE,
+                    &[error.to_string()],
+                ));
+            }
+            Err(_) => {
+                skipped_lines += 1;
+
+                continue;
+            }
+        };
+
+        latest_by_package.insert(event.package.name.clone(), event);
+    }
+
+    let has_skipped_lines = skipped_lines > 0;
+
+    if has_skipped_lines {
+        eprintln!(
+            "{}",
+            render_template(
+                LEDGER_WARN_SKIPPED_LINES_TEMPLATE,
+                &[skipped_lines.to_string(), ledger_path.display().to_string()],
+            )
+        );
+    }
+
+    Ok(latest_by_package)
 }
 
 pub fn query_history_events(

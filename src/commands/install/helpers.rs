@@ -291,8 +291,13 @@ pub(super) fn resolve_install_targets(
 
     if should_print_resolved_candidate {
         let transitive_count = packages_to_verify.len().saturating_sub(1);
+        let requested_spec = if install_request.version_spec.is_some() {
+            requested_package_ref.to_string()
+        } else {
+            install_request.package_name.clone()
+        };
         let print_install_candidate_resolved_params = PrintInstallCandidateResolvedParams {
-            requested_spec: &requested_package_ref.to_string(),
+            requested_spec: &requested_spec,
             resolved_candidate: &resolved_package_ref,
             transitive_count,
         };

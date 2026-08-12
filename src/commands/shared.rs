@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::artifact_store_config;
 use crate::ecosystem::{build_dependency_tree_for_manager, read_lockfile_entries};
-use crate::history::ledger::{HistoryQueryFilters, query_history_events};
+use crate::history::ledger::read_latest_events_by_package;
 use crate::npm::read_package_json_deps;
 use crate::types::UnverifiableReason;
 use crate::types::{
@@ -162,25 +162,9 @@ fn load_last_history_events_by_package(
     ledger_path: Option<&Path>,
 ) -> Option<Arc<HashMap<String, crate::history::types::HistoryEvent>>> {
     let history_ledger_path = ledger_path?;
+    let latest = read_latest_events_by_package(history_ledger_path).ok()?;
 
-    let filters = HistoryQueryFilters {
-        from: chrono::DateTime::<chrono::Utc>::MIN_UTC,
-        to: chrono::Utc::now(),
-        package: None,
-        version: None,
-        project: None,
-        package_manager: None,
-    };
-
-    let events = query_history_events(history_ledger_path, &filters).ok()?;
-    let mut last_events_by_package: HashMap<String, crate::history::types::HistoryEvent> =
-        HashMap::new();
-
-    for event in events {
-        last_events_by_package.insert(event.package.name.clone(), event);
-    }
-
-    Some(Arc::new(last_events_by_package))
+    Some(Arc::new(latest))
 }
 
 async fn verify_single_package(params: VerifySinglePackageParams) -> VerifyResult {
