@@ -65,8 +65,8 @@ pub(super) fn append_install_history(params: AppendInstallHistoryParams<'_>) -> 
             && result.package.version == package_ref.version
     });
 
-    let (had_provenance, provenance_workflow_path) = install_result
-        .map_or((false, None), |result| {
+    let (had_provenance, provenance_workflow_path) =
+        install_result.map_or((false, None), |result| {
             let current_had_provenance = result.evidence.provenance_workflow_path.is_some()
                 || result.evidence.provenance_identity.is_some();
 
