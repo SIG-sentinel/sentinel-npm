@@ -123,10 +123,10 @@ pub fn append_history_events(params: AppendHistoryEventsParams<'_>) -> Result<()
                 sha256_before: lock_hash_before.clone(),
                 sha256_after: lock_hash_after.clone(),
             },
-            package: package.clone(),
+            package: package.package.clone(),
             result: HISTORY_RESULT_SUCCESS.to_string(),
-            had_provenance: false,
-            provenance_workflow_path: None,
+            had_provenance: package.had_provenance,
+            provenance_workflow_path: package.provenance_workflow_path.clone(),
         })
         .collect();
 

@@ -447,6 +447,7 @@ pub struct EvaluatePostVerifyPackageMismatchParams<'a> {
 pub struct AppendInstallHistoryParams<'a> {
     pub args: &'a InstallArgs,
     pub package_ref: &'a PackageRef,
+    pub report: &'a Report,
     pub lock_hash_before_verify: &'a Option<String>,
 }
 

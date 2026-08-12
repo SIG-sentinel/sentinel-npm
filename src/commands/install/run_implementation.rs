@@ -520,6 +520,7 @@ async fn complete_successful_install(
     let append_install_history_params = crate::types::AppendInstallHistoryParams {
         args,
         package_ref,
+        report,
         lock_hash_before_verify,
     };
 

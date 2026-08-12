@@ -33,6 +33,13 @@ pub struct HistoryPackageMetadata {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct HistoryEventPackageInput {
+    pub package: HistoryPackageMetadata,
+    pub had_provenance: bool,
+    pub provenance_workflow_path: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct HistoryEvent {
     pub schema_version: u32,
     pub event_id: String,
@@ -141,7 +148,7 @@ pub struct AppendHistoryEventsParams<'a> {
     pub lockfile_path: &'a str,
     pub lock_hash_before: &'a Option<String>,
     pub lock_hash_after: &'a Option<String>,
-    pub packages: &'a [HistoryPackageMetadata],
+    pub packages: &'a [HistoryEventPackageInput],
 }
 
 #[derive(Clone, Copy)]
