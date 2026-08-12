@@ -5,6 +5,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] 2026/07/10
+
+### Added
+
+- **Provenance anomaly detection**: Temporal verification that flags when packages lose provenance signatures or publish workflow changes between versions.
+  - `ProvenanceDisappeared`: Alerts when a package had provenance in history but current version lacks it.
+  - `WorkflowChanged`: Alerts when publish workflow URL differs from last known-good version.
+  - Detection is automatic during `check`, `ci`, and `install` flows.
+- **History integration with provenance**: `had_provenance` and `provenance_workflow_path` fields now persisted in ledger events.
+- **Comprehensive smoke testing**: New Docker-based smoke scripts covering npm, Yarn, pnpm, command options coverage, and history flows.
+- **Provenance anomaly unit and smoke test suite**: Full coverage of anomaly detection logic with integration tests.
+
+### Changed
+
+- **Install command behavior**: `sentinel install` now accepts multiple package specs in one invocation (`install <pkg[@version]>...`) with sequential execution.
+  - The chain is atomic: any package verification/install failure aborts the remaining steps and restores the project snapshot.
+  - Dry-run in multi-package mode now also restores the initial snapshot at the end, preserving no-write semantics.
+- **CLI help text**: Root `--help` now features intent-driven examples with lowest-friction commands (`npx --yes sentinel-check ...`) instead of abstract descriptions.
+  - Subcommand descriptions added (`check`, `install`, `ci`, `history`) for quick scannability.
+  - New "MAIN EXAMPLES" section shows common workflows: audit, install one package, install multiple, secure lockfile init+verify.
+- **npm wrapper README**: Added concise "Main commands (quick map)" section mapping user intent → command.
+  - Focus on `npx --yes sentinel-check` usage for zero-setup adoption.
+  - Explicit examples for `--init-lockfile` chaining with package manager selection.
+- **npm wrapper internals**: Managed-binary download/checksum logic was extracted from `bin/_runner.js` into `bin/_managedBinary.js` to reduce complexity and improve maintainability.
+- **Install command architecture**: Large `mod.rs` split into focused modules for maintainability:
+  - `helpers.rs`: utility functions.
+  - `post_verify_core.rs`: post-verify orchestration logic.
+  - `post_verify_index.rs`: installed package index builder.
+  - `run_implementation.rs`: main install flow entry point.
+
+### Fixed
+
+- **Test scaffolding**: Updated `history_retention_unit_tests.rs` and `install_tests.rs` to handle new history event fields (`had_provenance`, `provenance_workflow_path`).
+- **Install execution params**: Added missing `cwd` field to `FinalizeInstallRunParams` across all test call sites.
+
+### Docs
+
+- Help text and CLI examples now emphasize low-friction `npx --yes` patterns for all main commands.
+- README structure refined for quick navigation by user intent.
+
 ## [2.1.2] - 2026-04-28
 
 ### Fixed
