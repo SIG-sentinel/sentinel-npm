@@ -126,3 +126,7 @@ pub(super) fn should_print_report(params: ShouldPrintReportParams<'_>) -> bool {
 #[cfg(test)]
 #[path = "../../../tests/internal/install_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "../../../tests/internal/install_multiple_packages_tests.rs"]
+mod install_multiple_packages_tests;

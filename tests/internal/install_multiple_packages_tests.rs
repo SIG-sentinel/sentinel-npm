@@ -1,14 +1,11 @@
 #![allow(clippy::expect_used)]
 
 use super::{parse_install_package_request, parse_package_ref};
-use crate::types::{InstallArgs, OutputFormat, PackageRef};
-use std::path::PathBuf;
-
-const TEST_TIMEOUT_MS: u64 = 1000;
+use crate::types::OutputFormat;
 
 #[test]
 fn test_parse_multiple_package_requests() {
-    let specs = vec!["lodash@4.17.21", "axios@1.11.0", "@types/express@4.17.25"];
+    let specs = ["lodash@4.17.21", "axios@1.11.0", "@types/express@4.17.25"];
 
     let parsed: Vec<_> = specs
         .iter()
@@ -23,7 +20,7 @@ fn test_parse_multiple_package_requests() {
 
 #[test]
 fn test_parse_package_refs_for_multiple_installs() {
-    let specs = vec!["lodash@4.17.21", "axios@1.11.0", "express@4.18.2"];
+    let specs = ["lodash@4.17.21", "axios@1.11.0", "express@4.18.2"];
 
     let parsed: Vec<_> = specs
         .iter()
@@ -41,9 +38,7 @@ fn test_parse_package_refs_for_multiple_installs() {
 
 #[test]
 fn test_install_args_accepts_multiple_packages_as_varargs() {
-    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
-
-    let packages = vec![
+    let packages = [
         "lodash@4.17.21".to_string(),
         "axios@1.11.0".to_string(),
         "express@4.18.2".to_string(),
@@ -55,9 +50,7 @@ fn test_install_args_accepts_multiple_packages_as_varargs() {
 
 #[test]
 fn test_multi_package_install_specification_with_common_flags() {
-    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
-
-    let packages = vec!["lodash@4.17.21", "axios@1.11.0", "express@4.18.2"];
+    let packages = ["lodash@4.17.21", "axios@1.11.0", "express@4.18.2"];
 
     let format = OutputFormat::Json;
     let allow_scripts = false;
@@ -71,14 +64,14 @@ fn test_multi_package_install_specification_with_common_flags() {
 
 #[test]
 fn test_atomic_install_specification_failure_in_one_fails_all() {
-    let packages = vec!["lodash@4.17.21", "malicious@1.0.0", "axios@1.11.0"];
+    let packages = ["lodash@4.17.21", "malicious@1.0.0", "axios@1.11.0"];
 
     let mut installed = vec![];
     let mut should_continue = true;
 
     for (idx, pkg) in packages.iter().enumerate() {
         if !should_continue {
-            println!("Chain stopped at package {}", idx);
+            assert_eq!(idx, 2);
             break;
         }
 
@@ -102,7 +95,7 @@ fn test_multi_package_install_consolidates_results_in_report() {
         integrity_verified: bool,
     }
 
-    let results = vec![
+    let results = [
         PackageInstallResult {
             name: "lodash".to_string(),
             version: "4.17.21".to_string(),
@@ -124,6 +117,8 @@ fn test_multi_package_install_consolidates_results_in_report() {
     ];
 
     assert_eq!(results.len(), 3);
+    assert_eq!(results[0].name, "lodash");
+    assert_eq!(results[0].version, "4.17.21");
     assert!(results.iter().all(|r| r.integrity_verified));
     assert!(results.iter().all(|r| r.status == "installed"));
 }
@@ -137,7 +132,7 @@ fn test_multi_package_json_output_structure() {
         verdict: String,
     }
 
-    let packages = vec![
+    let packages = [
         JsonReportPackage {
             name: "lodash".to_string(),
             version: "4.17.21".to_string(),
@@ -154,26 +149,31 @@ fn test_multi_package_json_output_structure() {
         packages.len(),
         packages.iter().filter(|p| p.verdict == "ok").count(),
     );
+    assert_eq!(packages[0].name, "lodash");
+    assert_eq!(packages[1].version, "1.11.0");
     assert_eq!(summary, (2, 2));
 }
 
 #[test]
 fn test_multi_package_ui_feedback_shows_progress_per_package() {
-    let packages = vec!["lodash@4.17.21", "axios@1.11.0", "express@4.18.2"];
+    let packages = ["lodash@4.17.21", "axios@1.11.0", "express@4.18.2"];
     let total = packages.len();
 
     for (idx, pkg) in packages.iter().enumerate() {
         let step = idx + 1;
-        let _expected_output = format!("[{}/{}] Installing {} ... ✓", step, total, pkg);
+        let expected_output = format!("[{step}/{total}] Installing {pkg} ... ✓");
+        assert!(expected_output.contains(pkg));
     }
 }
 
 #[test]
 fn test_rollback_removes_all_partial_changes_on_failure() {
     let initial_state = "clean";
-    let _after_pkg1_install = "lodash installed, package.json updated";
-    let _after_pkg2_failure = "axios install failed";
+    let after_pkg1_install = "lodash installed, package.json updated";
+    let after_pkg2_failure = "axios install failed";
     let final_state_after_rollback = "clean";
 
+    assert_ne!(after_pkg1_install, final_state_after_rollback);
+    assert_ne!(after_pkg2_failure, final_state_after_rollback);
     assert_eq!(initial_state, final_state_after_rollback);
 }

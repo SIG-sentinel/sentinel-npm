@@ -730,6 +730,8 @@ async fn run_install_single_package(args: &InstallArgs) -> ExitCode {
 
 async fn run_install_multiple_packages(args: &InstallArgs) -> ExitCode {
     let initial_snapshot = capture_project_files_snapshot(&args.cwd);
+    let is_text_output = matches!(args.format, OutputFormat::Text);
+    let should_print_progress = !args.quiet && is_text_output;
 
     let install_command_hint = format!("{} packages", args.packages.len());
     let resolve_install_package_manager_params = ResolvePackageManagerParams {
@@ -751,7 +753,9 @@ async fn run_install_multiple_packages(args: &InstallArgs) -> ExitCode {
 
     for (idx, package_spec) in args.packages.iter().enumerate() {
         let step = idx + 1;
-        eprintln!("[{step}/{total_packages}] Installing {package_spec}...");
+        if should_print_progress {
+            eprintln!("[{step}/{total_packages}] Installing {package_spec}...");
+        }
 
         let prepare_install_state_params = PrepareInstallStateParams {
             args,
@@ -775,18 +779,26 @@ async fn run_install_multiple_packages(args: &InstallArgs) -> ExitCode {
         }
 
         if outcome.exit_code != ExitCode::SUCCESS {
-            eprintln!("[{step}/{total_packages}] ✗ Installation failed for {package_spec}");
+            if should_print_progress {
+                eprintln!("[{step}/{total_packages}] ✗ Installation failed for {package_spec}");
+            }
+
             any_failed = true;
             break;
         }
 
-        eprintln!("[{step}/{total_packages}] ✓ Installation succeeded for {package_spec}");
+        if should_print_progress {
+            eprintln!("[{step}/{total_packages}] ✓ Installation succeeded for {package_spec}");
+        }
     }
 
     let should_rollback = any_failed || should_restore_snapshot;
 
     if should_rollback {
-        eprintln!("Rolling back all changes...");
+        if should_print_progress {
+            eprintln!("Rolling back project files (package.json and lockfile)...");
+        }
+
         let restore_project_files_snapshot_params = RestoreProjectFilesSnapshotParams {
             snapshot: &initial_snapshot,
             current_working_directory: &args.cwd,
@@ -797,7 +809,9 @@ async fn run_install_multiple_packages(args: &InstallArgs) -> ExitCode {
             return ExitCode::FAILURE;
         }
 
-        eprintln!("✓ All changes rolled back");
+        if should_print_progress {
+            eprintln!("✓ Project files rolled back");
+        }
 
         if any_failed {
             return ExitCode::FAILURE;
