@@ -223,12 +223,10 @@ async fn verify_single_package(params: VerifySinglePackageParams) -> VerifyResul
         };
 
         let anomalies = check_provenance_anomalies(&check_provenance_anomaly_params);
-        let is_clean_result = result.is_clean();
+        let should_surface_anomaly =
+            !anomalies.is_empty() && (result.is_clean() || result.is_provenance_missing());
 
-        match (is_clean_result, anomalies.is_empty()) {
-            (true, false) => Some(build_provenance_anomaly_detail(&anomalies)),
-            _ => None,
-        }
+        should_surface_anomaly.then(|| build_provenance_anomaly_detail(&anomalies))
     });
 
     if let Some(provenance_anomaly_detail) = provenance_anomaly_detail {
