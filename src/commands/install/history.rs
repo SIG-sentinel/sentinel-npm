@@ -17,8 +17,7 @@ pub(super) fn append_ci_history(params: AppendCiHistoryParams<'_>) -> Result<(),
         .iter()
         .filter(|result| result.is_clean())
         .map(|result| {
-            let had_provenance = result.evidence.provenance_workflow_path.is_some()
-                || result.evidence.provenance_identity.is_some();
+            let had_provenance = result.evidence.provenance_subject_digest.is_some();
 
             HistoryEventPackageInput {
                 package: HistoryPackageMetadata {
@@ -67,8 +66,7 @@ pub(super) fn append_install_history(params: AppendInstallHistoryParams<'_>) -> 
 
     let (had_provenance, provenance_workflow_path) =
         install_result.map_or((false, None), |result| {
-            let current_had_provenance = result.evidence.provenance_workflow_path.is_some()
-                || result.evidence.provenance_identity.is_some();
+            let current_had_provenance = result.evidence.provenance_subject_digest.is_some();
 
             (
                 current_had_provenance,

@@ -214,8 +214,7 @@ async fn verify_single_package(params: VerifySinglePackageParams) -> VerifyResul
     let provenance_anomaly_detail = last_history_events_by_package.as_ref().and_then(|events| {
         let last_event_for_package = events.get(&result.package.name);
 
-        let current_had_provenance = result.evidence.provenance_workflow_path.is_some()
-            || result.evidence.provenance_identity.is_some();
+        let current_had_provenance = result.evidence.provenance_subject_digest.is_some();
 
         let check_provenance_anomaly_params = ProvenanceAnomalyCheckParams {
             current_had_provenance,
