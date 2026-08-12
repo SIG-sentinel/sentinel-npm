@@ -1,3 +1,5 @@
+#![allow(clippy::expect_used, clippy::panic)]
+
 use clap::Parser;
 
 use crate::cli_parsers::parse_rfc3339_timestamp;

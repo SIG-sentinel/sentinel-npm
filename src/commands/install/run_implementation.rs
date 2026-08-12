@@ -670,18 +670,15 @@ async fn run_install_with_prepared_state(
 }
 
 pub(super) async fn run_install(args: &InstallArgs) -> ExitCode {
-    // Validate that at least one package is provided
     if args.packages.is_empty() {
         ui::print_generic_error("At least one package must be provided");
         return ExitCode::FAILURE;
     }
 
-    // For single package: use original logic (optimization + backward compatibility)
     if args.packages.len() == 1 {
         return run_install_single_package(args).await;
     }
 
-    // For multiple packages: atomic install with rollback on failure
     run_install_multiple_packages(args).await
 }
 
@@ -731,11 +728,8 @@ async fn run_install_single_package(args: &InstallArgs) -> ExitCode {
 }
 
 async fn run_install_multiple_packages(args: &InstallArgs) -> ExitCode {
-    // ATOMIC INSTALL: if any package fails, entire chain fails + rollback
-    // Capture initial state for complete rollback if needed
     let initial_snapshot = capture_project_files_snapshot(&args.cwd);
 
-    // Resolve package manager once
     let install_command_hint = format!("{} packages", args.packages.len());
     let resolve_install_package_manager_params = ResolvePackageManagerParams {
         project_dir: &args.cwd,
@@ -754,31 +748,25 @@ async fn run_install_multiple_packages(args: &InstallArgs) -> ExitCode {
     let mut any_failed = false;
     let mut should_restore_snapshot = false;
 
-    // Process each package sequentially
     for (idx, package_spec) in args.packages.iter().enumerate() {
         let step = idx + 1;
-        eprintln!(
-            "[{}/{}] Installing {}...",
-            step, total_packages, package_spec
-        );
+        eprintln!("[{step}/{total_packages}] Installing {package_spec}...");
 
-        // Prepare install state for this package
         let prepare_install_state_params = PrepareInstallStateParams {
             args,
-            manager: manager.clone(),
+            manager,
             package_spec,
         };
 
         let prepared_state = match prepare_install_state(prepare_install_state_params).await {
             Ok(state) => state,
             Err(_exit_code) => {
-                ui::print_generic_error(&format!("Failed to prepare install for {}", package_spec));
+                ui::print_generic_error(&format!("Failed to prepare install for {package_spec}"));
                 any_failed = true;
                 break;
             }
         };
 
-        // Execute install for this package
         let outcome = run_install_with_prepared_state(args, prepared_state).await;
 
         if outcome.should_restore_snapshot {
@@ -786,23 +774,16 @@ async fn run_install_multiple_packages(args: &InstallArgs) -> ExitCode {
         }
 
         if outcome.exit_code != ExitCode::SUCCESS {
-            eprintln!(
-                "[{}/{}] ✗ Installation failed for {}",
-                step, total_packages, package_spec
-            );
+            eprintln!("[{step}/{total_packages}] ✗ Installation failed for {package_spec}");
             any_failed = true;
             break;
         }
 
-        eprintln!(
-            "[{}/{}] ✓ Installation succeeded for {}",
-            step, total_packages, package_spec
-        );
+        eprintln!("[{step}/{total_packages}] ✓ Installation succeeded for {package_spec}");
     }
 
     let should_rollback = any_failed || should_restore_snapshot;
 
-    // If any package failed, or the run is dry-run, restore initial snapshot.
     if should_rollback {
         eprintln!("Rolling back all changes...");
         let restore_project_files_snapshot_params = RestoreProjectFilesSnapshotParams {
