@@ -221,8 +221,7 @@ pub(super) fn collect_install_packages_to_verify(
         .filter_map(|key| dependency_tree.nodes.get(key).cloned())
         .collect();
 
-    packages_to_verify
-        .sort_by(|left, right| left.package.to_string().cmp(&right.package.to_string()));
+    packages_to_verify.sort_by_key(|left| left.package.to_string());
 
     Some(packages_to_verify)
 }
