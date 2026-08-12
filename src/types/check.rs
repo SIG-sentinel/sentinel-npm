@@ -5,6 +5,7 @@ use std::sync::atomic::AtomicUsize;
 
 use indicatif::ProgressBar;
 
+use crate::history::types::HistoryEvent;
 use crate::npm::LockfileEntry;
 use crate::verifier::Verifier;
 
@@ -79,5 +80,5 @@ pub struct VerifySinglePackageParams {
     pub show_text_progress_fallback: bool,
     pub total_packages: usize,
     pub progress_step: usize,
-    pub ledger_path: Option<Arc<std::path::PathBuf>>,
+    pub last_history_events_by_package: Option<Arc<HashMap<String, HistoryEvent>>>,
 }

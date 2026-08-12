@@ -158,6 +158,31 @@ fn build_provenance_anomaly_detail(anomalies: &[ProvenanceAnomaly]) -> String {
     anomaly_descriptions.join("; ")
 }
 
+fn load_last_history_events_by_package(
+    ledger_path: Option<&Path>,
+) -> Option<Arc<HashMap<String, crate::history::types::HistoryEvent>>> {
+    let history_ledger_path = ledger_path?;
+
+    let filters = HistoryQueryFilters {
+        from: chrono::DateTime::<chrono::Utc>::MIN_UTC,
+        to: chrono::Utc::now(),
+        package: None,
+        version: None,
+        project: None,
+        package_manager: None,
+    };
+
+    let events = query_history_events(history_ledger_path, &filters).ok()?;
+    let mut last_events_by_package: HashMap<String, crate::history::types::HistoryEvent> =
+        HashMap::new();
+
+    for event in events {
+        last_events_by_package.insert(event.package.name.clone(), event);
+    }
+
+    Some(Arc::new(last_events_by_package))
+}
+
 async fn verify_single_package(params: VerifySinglePackageParams) -> VerifyResult {
     let VerifySinglePackageParams {
         node,
@@ -169,7 +194,7 @@ async fn verify_single_package(params: VerifySinglePackageParams) -> VerifyResul
         show_text_progress_fallback,
         total_packages,
         progress_step,
-        ledger_path,
+        last_history_events_by_package,
     } = params;
 
     let permit = concurrency_gate.acquire().await.ok();
@@ -186,19 +211,8 @@ async fn verify_single_package(params: VerifySinglePackageParams) -> VerifyResul
     result.is_direct = is_direct;
     result.direct_parent = direct_parent;
 
-    let provenance_anomaly_detail = ledger_path.as_ref().and_then(|history_ledger_path| {
-        let filters = HistoryQueryFilters {
-            from: chrono::DateTime::<chrono::Utc>::MIN_UTC,
-            to: chrono::Utc::now(),
-            package: Some(result.package.name.clone()),
-            version: None,
-            project: None,
-            package_manager: None,
-        };
-
-        let last_event_for_package = query_history_events(history_ledger_path, &filters)
-            .ok()
-            .and_then(|mut events| events.pop());
+    let provenance_anomaly_detail = last_history_events_by_package.as_ref().and_then(|events| {
+        let last_event_for_package = events.get(&result.package.name);
 
         let current_had_provenance = result.evidence.provenance_workflow_path.is_some()
             || result.evidence.provenance_identity.is_some();
@@ -206,7 +220,7 @@ async fn verify_single_package(params: VerifySinglePackageParams) -> VerifyResul
         let check_provenance_anomaly_params = ProvenanceAnomalyCheckParams {
             current_had_provenance,
             current_workflow_path: result.evidence.provenance_workflow_path.as_deref(),
-            last_event_for_package: last_event_for_package.as_ref(),
+            last_event_for_package,
         };
 
         let anomalies = check_provenance_anomalies(&check_provenance_anomaly_params);
@@ -259,6 +273,8 @@ pub(super) async fn verify_packages(params: VerifyPackagesExecutionParams) -> Ve
     let progress_step =
         total_packages.max(DEFAULT_PROGRESS_PARTITIONS) / DEFAULT_PROGRESS_PARTITIONS;
     let completed_counter = Arc::new(AtomicUsize::new(0));
+    let history_ledger_path = ledger_path.as_deref().map(std::path::PathBuf::as_path);
+    let last_history_events_by_package = load_last_history_events_by_package(history_ledger_path);
 
     let concurrency_gate = Arc::new(tokio::sync::Semaphore::new(max_concurrency));
 
@@ -281,7 +297,7 @@ pub(super) async fn verify_packages(params: VerifyPackagesExecutionParams) -> Ve
                 show_text_progress_fallback,
                 total_packages,
                 progress_step,
-                ledger_path: ledger_path.clone(),
+                last_history_events_by_package: last_history_events_by_package.clone(),
             };
 
             verify_single_package(verify_single_package_params)
