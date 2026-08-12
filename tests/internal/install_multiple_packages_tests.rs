@@ -177,10 +177,8 @@ fn test_rollback_restores_project_files_from_snapshot() {
     let original_package_json = b"{\"name\":\"test\",\"version\":\"1.0.0\"}";
     let original_lockfile = b"{\"lockfileVersion\":3}";
 
-    std::fs::write(cwd.join("package.json"), original_package_json)
-        .expect("write package.json");
-    std::fs::write(cwd.join("package-lock.json"), original_lockfile)
-        .expect("write lockfile");
+    std::fs::write(cwd.join("package.json"), original_package_json).expect("write package.json");
+    std::fs::write(cwd.join("package-lock.json"), original_lockfile).expect("write lockfile");
 
     let snapshot = capture_project_files_snapshot(cwd);
 

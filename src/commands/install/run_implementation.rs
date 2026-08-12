@@ -55,6 +55,38 @@ fn complete_successful_ci_run(params: CompleteSuccessfulCiRunParams<'_>) -> Exit
     super::helpers::complete_successful_ci_run(params)
 }
 
+fn read_initial_ledger_snapshot(
+    ledger_path: Option<&std::path::PathBuf>,
+) -> Result<Option<Vec<u8>>, std::io::Error> {
+    match ledger_path {
+        Some(path) => match std::fs::read(path) {
+            Ok(contents) => Ok(Some(contents)),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(error) => Err(error),
+        },
+        None => Ok(None),
+    }
+}
+
+fn restore_ledger_snapshot(
+    ledger_path: Option<&std::path::PathBuf>,
+    initial_ledger_snapshot: Option<&Vec<u8>>,
+) -> Result<(), std::io::Error> {
+    match (ledger_path, initial_ledger_snapshot) {
+        (Some(path), Some(contents)) => std::fs::write(path, contents),
+        (Some(path), None) => {
+            let remove_file_result = std::fs::remove_file(path);
+
+            match remove_file_result {
+                Ok(()) => Ok(()),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+                Err(error) => Err(error),
+            }
+        }
+        _ => Ok(()),
+    }
+}
+
 fn load_install_shared_state(
     current_working_directory: &std::path::Path,
     timeout: u64,
@@ -736,9 +768,17 @@ async fn run_install_multiple_packages(args: &InstallArgs) -> ExitCode {
     let ledger_path = crate::history::path::resolve_project_root(&args.cwd)
         .ok()
         .map(|root| crate::history::path::resolve_history_ledger_path(&root));
-    let initial_ledger_snapshot = ledger_path
-        .as_ref()
-        .and_then(|path| std::fs::read(path).ok());
+    let read_initial_ledger_snapshot_params = ledger_path.as_ref();
+    let initial_ledger_snapshot = match read_initial_ledger_snapshot(read_initial_ledger_snapshot_params)
+    {
+        Ok(snapshot) => snapshot,
+        Err(error) => {
+            ui::print_generic_error(&format!(
+                "Failed to snapshot history ledger before multi-package install: {error}"
+            ));
+            return ExitCode::FAILURE;
+        }
+    };
 
     let install_command_hint = format!("{} packages", args.packages.len());
     let resolve_install_package_manager_params = ResolvePackageManagerParams {
@@ -816,14 +856,12 @@ async fn run_install_multiple_packages(args: &InstallArgs) -> ExitCode {
             return ExitCode::FAILURE;
         }
 
-        match (&ledger_path, &initial_ledger_snapshot) {
-            (Some(path), Some(contents)) => {
-                let _ = std::fs::write(path, contents);
-            }
-            (Some(path), None) => {
-                let _ = std::fs::remove_file(path);
-            }
-            _ => {}
+        let restore_ledger_snapshot_result =
+            restore_ledger_snapshot(ledger_path.as_ref(), initial_ledger_snapshot.as_ref());
+
+        if let Err(error) = restore_ledger_snapshot_result {
+            ui::print_rollback_failed(&error);
+            return ExitCode::FAILURE;
         }
 
         if should_print_progress {
