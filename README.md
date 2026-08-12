@@ -206,21 +206,21 @@ Good for teams that will use Sentinel daily.
 Standard install to `/usr/local/bin`:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/SIG-sentinel/sentinel-npm/main/scripts/install.sh | sudo sh -s -- --version 2.1.2
+curl -fsSL https://raw.githubusercontent.com/SIG-sentinel/sentinel-npm/main/scripts/install.sh | sudo sh -s -- --version 2.2.0
 ```
 
 Install to user directory:
 
 ```bash
 curl -fsSL -o /tmp/install-sentinel.sh https://raw.githubusercontent.com/SIG-sentinel/sentinel-npm/main/scripts/install.sh
-INSTALL_DIR="$HOME/.local/bin" sh /tmp/install-sentinel.sh --version 2.1.2
+INSTALL_DIR="$HOME/.local/bin" sh /tmp/install-sentinel.sh --version 2.2.0
 ```
 
 Pin a specific version:
 
 ```bash
 curl -fsSL -o /tmp/install-sentinel.sh https://raw.githubusercontent.com/SIG-sentinel/sentinel-npm/main/scripts/install.sh
-sh /tmp/install-sentinel.sh --version 2.1.2
+sh /tmp/install-sentinel.sh --version 2.2.0
 ```
 
 Confirm installation:
@@ -355,7 +355,7 @@ If your repository already commits a trusted lockfile, prefer plain `sentinel ci
 
 ```yaml
 - name: Install sentinel
-  run: curl -fsSL https://raw.githubusercontent.com/SIG-sentinel/sentinel-npm/main/scripts/install.sh | sudo sh -s -- --version 2.1.2
+  run: curl -fsSL https://raw.githubusercontent.com/SIG-sentinel/sentinel-npm/main/scripts/install.sh | sudo sh -s -- --version 2.2.0
 
 - name: Verify dependency integrity
   run: sentinel ci

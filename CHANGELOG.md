@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.2.0] 2026/07/10
+## [2.2.0] - 2026-07-10
 
 ### Added
 
@@ -20,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Install command behavior**: `sentinel install` now accepts multiple package specs in one invocation (`install <pkg[@version]>...`) with sequential execution.
-  - The chain is atomic: any package verification/install failure aborts the remaining steps and restores the project snapshot.
+  - The chain aborts on first package verification/install failure and restores the project snapshot files (`package.json` and active lockfile).
   - Dry-run in multi-package mode now also restores the initial snapshot at the end, preserving no-write semantics.
 - **CLI help text**: Root `--help` now features intent-driven examples with lowest-friction commands (`npx --yes sentinel-check ...`) instead of abstract descriptions.
   - Subcommand descriptions added (`check`, `install`, `ci`, `history`) for quick scannability.
