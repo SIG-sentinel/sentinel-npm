@@ -120,6 +120,7 @@ pub struct ExecuteVerificationRunParams<'a> {
     pub packages_to_verify: Vec<DependencyNode>,
     pub verifier: Arc<Verifier>,
     pub lockfile_entries: Arc<HashMap<String, LockfileEntry>>,
+    pub cwd: &'a Path,
 }
 
 pub struct BlockedVerifyResults {
@@ -203,6 +204,7 @@ pub struct FinalizeInstallRunParams<'a> {
     pub report: &'a Report,
     pub lock_hash_before_verify: &'a Option<String>,
     pub prevalidated_tarball: Option<VerifiedTarball>,
+    pub cwd: &'a Path,
 }
 
 #[derive(Clone, Copy)]
@@ -294,6 +296,7 @@ pub struct ShouldPrintReportParams<'a> {
 pub struct PrepareInstallStateParams<'a> {
     pub args: &'a InstallArgs,
     pub manager: PackageManager,
+    pub package_spec: &'a str,
 }
 
 pub struct PrepareCiStateParams<'a> {
@@ -444,6 +447,7 @@ pub struct EvaluatePostVerifyPackageMismatchParams<'a> {
 pub struct AppendInstallHistoryParams<'a> {
     pub args: &'a InstallArgs,
     pub package_ref: &'a PackageRef,
+    pub report: &'a Report,
     pub lock_hash_before_verify: &'a Option<String>,
 }
 

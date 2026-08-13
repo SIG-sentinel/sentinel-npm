@@ -5,15 +5,19 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::artifact_store_config;
 use crate::ecosystem::{build_dependency_tree_for_manager, read_lockfile_entries};
+use crate::history::ledger::read_latest_events_by_package;
 use crate::npm::read_package_json_deps;
+use crate::types::UnverifiableReason;
 use crate::types::{
     BuildLockfileEntryParams, DependencyTree, LockfileEntry, PrintVerificationProgressParams,
-    ReadPackageJsonDepsParams, Report, RunMode, SentinelError, SharedCommandState,
-    SharedCommandStateError, UpdateVerificationProgressParams, VerifierNewParams,
-    VerifyPackagesExecutionParams, VerifyPackagesParams, VerifyResult, VerifySinglePackageParams,
+    ProvenanceAnomaly, ProvenanceAnomalyCheckParams, ReadPackageJsonDepsParams, Report, RunMode,
+    SentinelError, SharedCommandState, SharedCommandStateError, UpdateVerificationProgressParams,
+    VerifierNewParams, VerifyPackagesExecutionParams, VerifyPackagesParams, VerifyResult,
+    VerifySinglePackageParams,
 };
 use crate::verifier::Verifier;
 use crate::verifier::memory_budget::detect_memory_budget;
+use crate::verifier::provenance_anomaly::check_provenance_anomalies;
 
 const FIRST_PROGRESS_UPDATE: usize = 1;
 const PERCENT_SCALE: usize = 100;
@@ -138,6 +142,31 @@ fn update_verification_progress(params: UpdateVerificationProgressParams<'_>) {
     crate::ui::print_verification_progress(print_verification_progress_params);
 }
 
+fn build_provenance_anomaly_detail(anomalies: &[ProvenanceAnomaly]) -> String {
+    let anomaly_descriptions: Vec<String> = anomalies
+        .iter()
+        .map(|anomaly| match anomaly {
+            ProvenanceAnomaly::ProvenanceDisappeared => {
+                "provenance disappeared since last known-good version".to_string()
+            }
+            ProvenanceAnomaly::WorkflowChanged { previous, current } => {
+                format!("publish workflow changed: {previous} → {current}")
+            }
+        })
+        .collect();
+
+    anomaly_descriptions.join("; ")
+}
+
+fn load_last_history_events_by_package(
+    ledger_path: Option<&Path>,
+) -> Option<Arc<HashMap<String, crate::history::types::HistoryEvent>>> {
+    let history_ledger_path = ledger_path?;
+    let latest = read_latest_events_by_package(history_ledger_path).ok()?;
+
+    Some(Arc::new(latest))
+}
+
 async fn verify_single_package(params: VerifySinglePackageParams) -> VerifyResult {
     let VerifySinglePackageParams {
         node,
@@ -149,6 +178,7 @@ async fn verify_single_package(params: VerifySinglePackageParams) -> VerifyResul
         show_text_progress_fallback,
         total_packages,
         progress_step,
+        last_history_events_by_package,
     } = params;
 
     let permit = concurrency_gate.acquire().await.ok();
@@ -164,6 +194,31 @@ async fn verify_single_package(params: VerifySinglePackageParams) -> VerifyResul
 
     result.is_direct = is_direct;
     result.direct_parent = direct_parent;
+
+    let provenance_anomaly_detail = last_history_events_by_package.as_ref().and_then(|events| {
+        let last_event_for_package = events.get(&result.package.name);
+
+        let current_had_provenance = result.evidence.provenance_subject_digest.is_some();
+
+        let check_provenance_anomaly_params = ProvenanceAnomalyCheckParams {
+            current_had_provenance,
+            current_workflow_path: result.evidence.provenance_workflow_path.as_deref(),
+            last_event_for_package,
+        };
+
+        let anomalies = check_provenance_anomalies(&check_provenance_anomaly_params);
+        let should_surface_anomaly =
+            !anomalies.is_empty() && (result.is_clean() || result.is_provenance_missing());
+
+        should_surface_anomaly.then(|| build_provenance_anomaly_detail(&anomalies))
+    });
+
+    if let Some(provenance_anomaly_detail) = provenance_anomaly_detail {
+        result.verdict = crate::types::Verdict::Unverifiable {
+            reason: UnverifiableReason::ProvenanceAnomalous,
+        };
+        result.detail = provenance_anomaly_detail;
+    }
 
     drop(permit);
 
@@ -186,6 +241,7 @@ pub(super) async fn verify_packages(params: VerifyPackagesExecutionParams) -> Ve
         max_concurrency,
         progress_bar,
         show_text_progress_fallback,
+        ledger_path,
     } = params;
 
     let VerifyPackagesParams {
@@ -198,6 +254,8 @@ pub(super) async fn verify_packages(params: VerifyPackagesExecutionParams) -> Ve
     let progress_step =
         total_packages.max(DEFAULT_PROGRESS_PARTITIONS) / DEFAULT_PROGRESS_PARTITIONS;
     let completed_counter = Arc::new(AtomicUsize::new(0));
+    let history_ledger_path = ledger_path.as_deref().map(std::path::PathBuf::as_path);
+    let last_history_events_by_package = load_last_history_events_by_package(history_ledger_path);
 
     let concurrency_gate = Arc::new(tokio::sync::Semaphore::new(max_concurrency));
 
@@ -220,6 +278,7 @@ pub(super) async fn verify_packages(params: VerifyPackagesExecutionParams) -> Ve
                 show_text_progress_fallback,
                 total_packages,
                 progress_step,
+                last_history_events_by_package: last_history_events_by_package.clone(),
             };
 
             verify_single_package(verify_single_package_params)

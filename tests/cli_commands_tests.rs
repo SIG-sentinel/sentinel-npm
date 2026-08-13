@@ -140,7 +140,8 @@ fn test_install_command_defaults() {
 
     match cli.command {
         Commands::Install(args) => {
-            assert_eq!(args.package, "left-pad@1.3.0");
+            assert_eq!(args.packages.len(), 1);
+            assert_eq!(args.packages[0], "left-pad@1.3.0");
             assert!(!args.allow_scripts, "scripts should be blocked by default");
             assert!(!args.dry_run);
             assert!(!args.quiet);
@@ -152,6 +153,29 @@ fn test_install_command_defaults() {
             assert_eq!(args.format, OutputFormat::Text);
             assert_eq!(args.cwd.to_string_lossy(), ".");
             assert!(!args.post_verify);
+        }
+        _ => panic!("expected install command"),
+    }
+}
+
+#[test]
+fn test_install_command_accepts_multiple_packages() {
+    let cli = Cli::try_parse_from([
+        "sentinel",
+        "install",
+        "lodash@4.17.21",
+        "axios@1.11.0",
+        "express@4.18.2",
+    ])
+    .expect("multiple packages should parse");
+
+    match cli.command {
+        Commands::Install(args) => {
+            assert_eq!(args.packages.len(), 3);
+            assert_eq!(args.packages[0], "lodash@4.17.21");
+            assert_eq!(args.packages[1], "axios@1.11.0");
+            assert_eq!(args.packages[2], "express@4.18.2");
+            assert!(!args.allow_scripts, "scripts should be blocked by default");
         }
         _ => panic!("expected install command"),
     }
@@ -180,7 +204,8 @@ fn test_install_command_with_allow_scripts_flag() {
 
     match cli.command {
         Commands::Install(args) => {
-            assert_eq!(args.package, "@scope/pkg@2.0.1");
+            assert_eq!(args.packages.len(), 1);
+            assert_eq!(args.packages[0], "@scope/pkg@2.0.1");
             assert!(args.allow_scripts, "--allow-scripts should enable scripts");
             assert!(args.dry_run);
             assert!(args.quiet);
@@ -201,7 +226,8 @@ fn test_install_command_accepts_range_version_for_candidate_resolution() {
 
     match cli.command {
         Commands::Install(args) => {
-            assert_eq!(args.package, "left-pad@^1.3.0");
+            assert_eq!(args.packages.len(), 1);
+            assert_eq!(args.packages[0], "left-pad@^1.3.0");
         }
         _ => panic!("expected install command"),
     }

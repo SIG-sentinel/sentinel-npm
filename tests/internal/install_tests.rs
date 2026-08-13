@@ -452,7 +452,7 @@ async fn test_finalize_install_run_aborts_when_lockfile_hash_changes_before_inst
         .expect("lockfile should be written");
 
     let args = InstallArgs {
-        package: "lodash@4.17.21".to_string(),
+        packages: vec!["lodash@4.17.21".to_string()],
         allow_scripts: false,
         dry_run: false,
         post_verify: false,
@@ -474,6 +474,7 @@ async fn test_finalize_install_run_aborts_when_lockfile_hash_changes_before_inst
         report: &report,
         lock_hash_before_verify: &previous_hash,
         prevalidated_tarball: None,
+        cwd: &args.cwd,
     };
     let outcome = finalize_install_run(finalize_install_run_params).await;
 
@@ -647,7 +648,7 @@ async fn test_finalize_install_run_post_verify_writes_install_history() {
         vec![],
     );
     let args = InstallArgs {
-        package: package_ref.to_string(),
+        packages: vec![package_ref.to_string()],
         allow_scripts: false,
         dry_run: false,
         post_verify: true,
@@ -676,6 +677,7 @@ async fn test_finalize_install_run_post_verify_writes_install_history() {
                 report: &report,
                 lock_hash_before_verify: &lock_hash_before_verify,
                 prevalidated_tarball: None,
+                cwd: &args.cwd,
             };
 
             finalize_install_run(finalize_install_run_params).await
@@ -722,7 +724,7 @@ async fn test_finalize_install_run_post_verify_failure_skips_history_write() {
         vec![],
     );
     let args = InstallArgs {
-        package: package_ref.to_string(),
+        packages: vec![package_ref.to_string()],
         allow_scripts: false,
         dry_run: false,
         post_verify: true,
@@ -751,6 +753,7 @@ async fn test_finalize_install_run_post_verify_failure_skips_history_write() {
                 report: &report,
                 lock_hash_before_verify: &lock_hash_before_verify,
                 prevalidated_tarball: None,
+                cwd: &args.cwd,
             };
 
             finalize_install_run(finalize_install_run_params).await
@@ -978,7 +981,7 @@ esac
             cache.put(&cached_clean);
 
             let args = InstallArgs {
-                package: "lodash@4.17.21".to_string(),
+                packages: vec!["lodash@4.17.21".to_string()],
                 allow_scripts: false,
                 dry_run: false,
                 post_verify: false,
@@ -1047,7 +1050,7 @@ async fn test_finalize_install_run_uses_spool_tarball_and_cleans_up_temp_file() 
     let patched_path = format!("{}:{}", bin_dir.display(), previous_path);
 
     let args = InstallArgs {
-        package: "lodash@4.17.21".to_string(),
+        packages: vec!["lodash@4.17.21".to_string()],
         allow_scripts: false,
         dry_run: false,
         post_verify: false,
@@ -1071,6 +1074,7 @@ async fn test_finalize_install_run_uses_spool_tarball_and_cleans_up_temp_file() 
                 report: &report,
                 lock_hash_before_verify: &lock_hash_before_verify,
                 prevalidated_tarball: Some(VerifiedTarball::Spool(spool_path.clone())),
+                cwd: &args.cwd,
             };
 
             finalize_install_run(finalize_install_run_params).await
@@ -1137,7 +1141,7 @@ async fn test_finalize_install_run_uses_yarn_cache_prewarm_without_rewriting_dep
     let patched_path = format!("{}:{}", bin_dir.display(), previous_path);
 
     let args = InstallArgs {
-        package: "lodash@4.17.21".to_string(),
+        packages: vec!["lodash@4.17.21".to_string()],
         allow_scripts: false,
         dry_run: false,
         post_verify: false,
@@ -1161,6 +1165,7 @@ async fn test_finalize_install_run_uses_yarn_cache_prewarm_without_rewriting_dep
                 report: &report,
                 lock_hash_before_verify: &lock_hash_before_verify,
                 prevalidated_tarball: Some(VerifiedTarball::Spool(spool_path.clone())),
+                cwd: &args.cwd,
             };
 
             finalize_install_run(finalize_install_run_params).await
@@ -1243,7 +1248,7 @@ async fn test_finalize_install_run_uses_pnpm_store_prewarm_without_rewriting_dep
     let patched_path = format!("{}:{}", bin_dir.display(), previous_path);
 
     let args = InstallArgs {
-        package: "lodash@4.17.21".to_string(),
+        packages: vec!["lodash@4.17.21".to_string()],
         allow_scripts: false,
         dry_run: false,
         post_verify: false,
@@ -1267,6 +1272,7 @@ async fn test_finalize_install_run_uses_pnpm_store_prewarm_without_rewriting_dep
                 report: &report,
                 lock_hash_before_verify: &lock_hash_before_verify,
                 prevalidated_tarball: Some(VerifiedTarball::Spool(spool_path.clone())),
+                cwd,
             };
 
             finalize_install_run(finalize_install_run_params).await

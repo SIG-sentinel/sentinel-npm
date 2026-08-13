@@ -52,12 +52,12 @@ yarn.lock / pnpm-lock.yaml / package-lock.json
 
 ## Pick the right command
 
-| Command                              | When to use                              | What it does                                                                                                                      |
-| ------------------------------------ | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `sentinel check`                     | Local audit, PR review, debugging        | Audits the current project without installing anything                                                                            |
-| `sentinel ci`                        | Pipeline, clean environment, strict gate | Verifies **every package in the lockfile** and, if all pass, runs the clean install command for the detected manager              |
-| `sentinel install package[@version]` | Adding a new package safely              | Resolves the package in the lockfile, verifies the target and its transitive deps, then runs the manager-specific install command |
-| `sentinel history`                   | Trace recent installs and CI runs        | Queries the local install history ledger by time range, package, project, or package manager                                      |
+| Command                                  | When to use                              | What it does                                                                                                                                                        |
+| ---------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sentinel check`                         | Local audit, PR review, debugging        | Audits the current project without installing anything                                                                                                              |
+| `sentinel ci`                            | Pipeline, clean environment, strict gate | Verifies **every package in the lockfile** and, if all pass, runs the clean install command for the detected manager                                                |
+| `sentinel install package[@version] ...` | Adding one or more packages safely       | Resolves each requested package in order, verifies target and transitive deps, and executes an atomic install chain (any failure aborts and rolls back all changes) |
+| `sentinel history`                       | Trace recent installs and CI runs        | Queries the local install history ledger by time range, package, project, or package manager                                                                        |
 
 > If your goal is "install the whole project from the lockfile", the right command is `sentinel ci`.
 
@@ -107,7 +107,7 @@ This section reflects the current CLI help output.
 | `--registry-max-in-flight <N>`         | Max concurrent registry requests for this command (CLI override).                       |
 | `-q, --quiet`                          | Reduces non-essential output.                                                           |
 
-### `sentinel install <PACKAGE[@VERSION]>` options
+### `sentinel install <PACKAGE[@VERSION]>...` options
 
 | Flag                                   | Description                                                                             |
 | -------------------------------------- | --------------------------------------------------------------------------------------- |
@@ -120,6 +120,13 @@ This section reflects the current CLI help output.
 | `--timeout <TIMEOUT>`                  | Registry timeout in milliseconds (default: `5000`).                                     |
 | `--registry-max-in-flight <N>`         | Max concurrent registry requests for this command (CLI override).                       |
 | `-q, --quiet`                          | Reduces non-essential output.                                                           |
+
+Install chain behavior:
+
+1. Sentinel processes each package sequentially and prints progress as `[N/M]`.
+2. If one package fails verification or install, Sentinel stops the chain immediately.
+3. Sentinel restores the project snapshot and fails the command (atomic rollback).
+4. The chain only succeeds when all requested packages succeed.
 
 ### `sentinel history` options
 
@@ -145,6 +152,8 @@ This section reflects the current CLI help output.
    Sentinel performs provenance checks during verification automatically (no separate `provenance verify` command), and provenance fields are included in evidence/report output when available.
 4. Post-verify safety pass:
    `--post-verify` performs a second integrity pass after install by validating installed content against verified artifacts, useful for extra assurance in CI and release workflows.
+5. Output summary split:
+   Text, GitHub, and JUnit outputs separate `blocking unverifiable` from `provenance warning` to reduce false-alarm noise while preserving strict blocking behavior for security-relevant issues.
 
 ### Useful environment variables
 
@@ -178,6 +187,9 @@ npx --yes sentinel-check check
 # install a specific package with verification
 npx --yes sentinel-check install lodash@4.17.21
 
+# install multiple packages in one atomic command
+npx --yes sentinel-check install lodash@4.17.21 axios@1.11.0 express@4.18.2
+
 # enable lifecycle scripts explicitly only if required by your dependencies
 npx --yes sentinel-check install lodash@4.17.21 --allow-scripts
 
@@ -194,21 +206,21 @@ Good for teams that will use Sentinel daily.
 Standard install to `/usr/local/bin`:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/SIG-sentinel/sentinel-npm/main/scripts/install.sh | sudo sh -s -- --version 2.1.1
+curl -fsSL https://raw.githubusercontent.com/SIG-sentinel/sentinel-npm/main/scripts/install.sh | sudo sh -s -- --version 2.2.0
 ```
 
 Install to user directory:
 
 ```bash
 curl -fsSL -o /tmp/install-sentinel.sh https://raw.githubusercontent.com/SIG-sentinel/sentinel-npm/main/scripts/install.sh
-INSTALL_DIR="$HOME/.local/bin" sh /tmp/install-sentinel.sh --version 2.1.0
+INSTALL_DIR="$HOME/.local/bin" sh /tmp/install-sentinel.sh --version 2.2.0
 ```
 
 Pin a specific version:
 
 ```bash
 curl -fsSL -o /tmp/install-sentinel.sh https://raw.githubusercontent.com/SIG-sentinel/sentinel-npm/main/scripts/install.sh
-sh /tmp/install-sentinel.sh --version 2.1.0
+sh /tmp/install-sentinel.sh --version 2.2.0
 ```
 
 Confirm installation:
@@ -319,22 +331,22 @@ If the workflow may start without a lockfile, use:
 
 ```yaml
 - name: Initialize lockfile and verify dependency integrity
-  run: npx --yes sentinel-check ci --init-lockfile
+  run: npx --yes sentinel-check ci --init-lockfile --package-manager npm
 ```
 
 ### Package manager setup examples
 
 ```yaml
 # npm lockfile
-- run: npx --yes sentinel-check ci --init-lockfile
+- run: npx --yes sentinel-check ci --init-lockfile --package-manager npm
 
 # yarn lockfile
 - run: corepack enable
-- run: npx --yes sentinel-check ci --init-lockfile
+- run: npx --yes sentinel-check ci --init-lockfile --package-manager yarn
 
 # pnpm lockfile
 - run: corepack enable
-- run: npx --yes sentinel-check ci --init-lockfile
+- run: npx --yes sentinel-check ci --init-lockfile --package-manager pnpm
 ```
 
 If your repository already commits a trusted lockfile, prefer plain `sentinel ci` and reserve `--init-lockfile` for controlled recovery or first-time setup.
@@ -343,7 +355,7 @@ If your repository already commits a trusted lockfile, prefer plain `sentinel ci
 
 ```yaml
 - name: Install sentinel
-  run: curl -fsSL https://raw.githubusercontent.com/SIG-sentinel/sentinel-npm/main/scripts/install.sh | sudo sh -s -- --version 2.1.0
+  run: curl -fsSL https://raw.githubusercontent.com/SIG-sentinel/sentinel-npm/main/scripts/install.sh | sudo sh -s -- --version 2.2.0
 
 - name: Verify dependency integrity
   run: sentinel ci
@@ -356,8 +368,10 @@ If the workflow needs Sentinel to initialize the lockfile first:
 
 ```yaml
 - name: Initialize lockfile and verify dependency integrity
-  run: sentinel ci --init-lockfile
+  run: sentinel ci --init-lockfile --package-manager npm
 ```
+
+> Replace `npm` with `yarn` or `pnpm` based on your project's package manager.
 
 ### Machine-readable output
 
@@ -368,9 +382,9 @@ sentinel check --format github
 sentinel ci --dry-run --format json --report sentinel-report.json
 ```
 
-If no lockfile is present, use `sentinel ci --init-lockfile` to let Sentinel create or refresh it in the guarded flow.
+If no lockfile is present, use `sentinel ci --init-lockfile --package-manager <npm|yarn|pnpm>` to let Sentinel create or refresh it in the guarded flow.
 
-The secure order in CI is: commit and review a trusted lockfile when possible, run `sentinel ci` for normal enforcement, and use `sentinel ci --init-lockfile` only for controlled initialization or recovery.
+The secure order in CI is: commit and review a trusted lockfile when possible, run `sentinel ci` for normal enforcement, and use `sentinel ci --init-lockfile --package-manager <npm|yarn|pnpm>` only for controlled initialization or recovery.
 
 ### Using sentinel alongside npm audit
 
@@ -446,4 +460,4 @@ If these practices are not in place, Sentinel's protection window narrows signif
 | `UNVERIFIABLE` | could not confirm the chain | installation blocked |
 | `COMPROMISED`  | divergence detected         | installation blocked |
 
-If Sentinel prints `dependency cycles detected`, the dependency graph contains circular chains. Sentinel will **continue verification and report cycles as a warning** (not a blocker). This allows you to see package integrity status despite cycles. For a safe first recovery step, remove `node_modules` and rerun `sentinel ci` (or `npx --yes sentinel-check ci`). If lockfile recovery is needed, remove the lockfile and rerun `sentinel ci --init-lockfile` so Sentinel regenerates it in the guarded flow.
+If Sentinel prints `dependency cycles detected`, the dependency graph contains circular chains. Sentinel will **continue verification and report cycles as a warning** (not a blocker). This allows you to see package integrity status despite cycles. For a safe first recovery step, remove `node_modules` and rerun `sentinel ci` (or `npx --yes sentinel-check ci`). If lockfile recovery is needed, remove the lockfile and rerun `sentinel ci --init-lockfile --package-manager <npm|yarn|pnpm>` so Sentinel regenerates it in the guarded flow.

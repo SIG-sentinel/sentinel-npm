@@ -26,8 +26,12 @@ pub struct Cli {
 
 #[derive(Subcommand, Debug)]
 pub enum Commands {
+    #[command(about = "Audit dependencies without installing packages")]
     Check(CheckArgs),
+    #[command(about = "Install one or more packages with atomic verification")]
     Install(InstallArgs),
+    #[command(about = "Verify full lockfile then run clean install")]
     Ci(CiArgs),
+    #[command(about = "Query local install/ci history ledger")]
     History(HistoryArgs),
 }

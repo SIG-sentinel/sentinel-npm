@@ -42,6 +42,8 @@ fn make_event(
             direct: false,
         },
         result: "success".to_string(),
+        had_provenance: false,
+        provenance_workflow_path: None,
     }
 }
 

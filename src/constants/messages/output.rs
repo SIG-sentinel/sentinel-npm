@@ -15,6 +15,7 @@ pub const OUTPUT_REASON_MISSING_FROM_LOCKFILE: &str = "not in lockfile";
 pub const OUTPUT_REASON_TARBALL_TOO_LARGE: &str = "tarball too large";
 pub const OUTPUT_REASON_PROVENANCE_MISSING: &str = "provenance not available";
 pub const OUTPUT_REASON_PROVENANCE_INCONSISTENT: &str = "provenance inconsistent";
+pub const OUTPUT_REASON_PROVENANCE_ANOMALOUS: &str = "provenance anomaly detected";
 
 pub const OUTPUT_NEXT_ACTION_COMPROMISED: &str =
     "  {} escalate each compromised package above to your security process with evidence.";

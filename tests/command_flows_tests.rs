@@ -477,7 +477,7 @@ async fn test_install_fails_when_no_lockfile_exists() {
     write_package_json(temp_dir.path());
 
     let args = InstallArgs {
-        package: "lodash@4.17.21".to_string(),
+        packages: vec!["lodash@4.17.21".to_string()],
         allow_scripts: false,
         dry_run: true,
         post_verify: false,

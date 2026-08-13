@@ -13,19 +13,6 @@ use crate::types::{
 };
 use crate::ui::command_feedback as ui;
 
-// Re-export from submodules for backward compatibility
-pub(super) use super::history::{append_ci_history, append_install_history};
-pub(super) use super::lockfile::{ensure_ci_lockfile_ready, prepare_install_lockfiles};
-pub(super) use super::policy::{
-    collect_blocked_verify_results, print_block_reason_results, resolve_install_block_reason,
-    resolve_install_policy,
-};
-pub(super) use super::resolve::{
-    collect_install_packages_to_verify, parse_install_package_request,
-    resolve_install_candidate_package,
-};
-pub(super) use super::source::install_from_verified_source;
-
 pub(super) fn analyze_dependency_cycles(
     params: AnalyzeDependencyCyclesParams<'_>,
 ) -> Vec<Vec<String>> {
@@ -208,7 +195,7 @@ pub(super) fn complete_successful_ci_run(params: CompleteSuccessfulCiRunParams<'
         lock_hash_before_verify,
     };
 
-    if let Err(error) = append_ci_history(append_ci_history_params) {
+    if let Err(error) = super::history::append_ci_history(append_ci_history_params) {
         ui::print_generic_error(&error);
 
         return ExitCode::FAILURE;
@@ -220,17 +207,17 @@ pub(super) fn complete_successful_ci_run(params: CompleteSuccessfulCiRunParams<'
 pub(super) fn parse_requested_install(
     args: &InstallArgs,
 ) -> Result<(InstallPackageRequest, PackageRef), ExitCode> {
-    let install_request = parse_install_package_request(&args.package).ok_or_else(|| {
-        let package_name_hint = args
-            .package
-            .split('@')
-            .find(|segment| !segment.is_empty())
-            .unwrap_or("<package>");
+    let install_request = super::resolve::parse_install_package_request(&args.packages[0])
+        .ok_or_else(|| {
+            let package_name_hint = args.packages[0]
+                .split('@')
+                .find(|segment: &&str| !segment.is_empty())
+                .unwrap_or("<package>");
 
-        ui::print_invalid_install_package_input(&args.package, package_name_hint);
+            ui::print_invalid_install_package_input(&args.packages[0], package_name_hint);
 
-        ExitCode::FAILURE
-    })?;
+            ExitCode::FAILURE
+        })?;
 
     let candidate_spec = install_request
         .version_spec
@@ -277,7 +264,7 @@ pub(super) fn resolve_install_targets(
     } = params;
 
     let Some(resolved_package_ref) =
-        resolve_install_candidate_package(dependency_tree, install_request)
+        super::resolve::resolve_install_candidate_package(dependency_tree, install_request)
     else {
         ui::print_target_package_not_found(requested_package_ref);
 
@@ -290,7 +277,7 @@ pub(super) fn resolve_install_targets(
     };
 
     let Some(packages_to_verify) =
-        collect_install_packages_to_verify(collect_install_packages_params)
+        super::resolve::collect_install_packages_to_verify(collect_install_packages_params)
     else {
         ui::print_target_package_not_found(&resolved_package_ref);
 
@@ -305,7 +292,7 @@ pub(super) fn resolve_install_targets(
     if should_print_resolved_candidate {
         let transitive_count = packages_to_verify.len().saturating_sub(1);
         let print_install_candidate_resolved_params = PrintInstallCandidateResolvedParams {
-            requested_spec: &args.package,
+            requested_spec: &args.packages[0],
             resolved_candidate: &resolved_package_ref,
             transitive_count,
         };

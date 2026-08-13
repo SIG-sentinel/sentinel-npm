@@ -200,6 +200,15 @@ fn resolve_provenance_identity(slsa_payload: &SlsaV1Payload) -> Option<String> {
     Some(identity_path)
 }
 
+fn resolve_workflow_path(slsa_payload: &SlsaV1Payload) -> Option<String> {
+    let predicate = slsa_payload.predicate.as_ref()?;
+    let build_definition = predicate.build_definition.as_ref()?;
+    let external_parameters = build_definition.external_parameters.as_ref()?;
+    let workflow = external_parameters.workflow.as_ref()?;
+
+    workflow.path.clone()
+}
+
 impl NpmRegistry {
     pub fn new(params: NpmRegistryNewParams<'_>) -> Result<Self, SentinelError> {
         let NpmRegistryNewParams {
@@ -373,12 +382,14 @@ impl NpmRegistry {
         let subject_integrity = format!("{INTEGRITY_SHA512_PREFIX}{sha512_b64}");
 
         let identity = resolve_provenance_identity(&slsa_payload);
+        let workflow_path = resolve_workflow_path(&slsa_payload);
 
         let npm_provenance = NpmProvenance {
             subject_integrity: Some(subject_integrity),
             issuer: None,
             identity,
             source: Some(url.to_string()),
+            workflow_path,
         };
 
         Some(npm_provenance)

@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use clap::Args;
 
 use crate::cli_parsers::{
-    parse_exact_package_version, parse_positive_usize, parse_rfc3339_timestamp,
+    parse_install_package_spec, parse_positive_usize, parse_rfc3339_timestamp,
 };
 use crate::constants::{
     CI_REGISTRY_TIMEOUT_MS, CLI_ARG_DEFAULT_CWD, CLI_ARG_DEFAULT_OUTPUT_FORMAT,
@@ -18,8 +18,14 @@ use crate::types::OutputFormat;
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Args, Debug)]
 pub struct InstallArgs {
-    #[arg(value_name = CLI_ARG_VALUE_NAME_PACKAGE_WITH_VERSION, value_parser = parse_exact_package_version)]
-    pub package: String,
+    #[arg(
+        value_name = CLI_ARG_VALUE_NAME_PACKAGE_WITH_VERSION,
+        num_args = 1..,
+        required = true,
+        value_parser = parse_install_package_spec,
+        help = "One or more packages to install (e.g., lodash@4.17.21 axios@1.11.0)"
+    )]
+    pub packages: Vec<String>,
 
     #[arg(long, help = CLI_HELP_ALLOW_SCRIPTS)]
     pub allow_scripts: bool,

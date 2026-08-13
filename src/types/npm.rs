@@ -37,6 +37,7 @@ pub struct NpmProvenance {
     pub identity: Option<String>,
     #[serde(default)]
     pub source: Option<String>,
+    pub workflow_path: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
